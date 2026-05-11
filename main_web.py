@@ -6235,13 +6235,20 @@ class CoplanApi:
             (pode falhar por unique-index)
           * ``"skip"``: pula obras duplicadas
         """
-        r = self.pick_ganhos_file()  # mesmo file dialog (xlsx/csv)
-        if not r.get("ok"):
-            return {"ok": False, "error": r.get("error") or "cancelado",
+        # File dialog que devolve {ok, path, error}. Antes usava
+        # pick_ganhos_file() que retorna read_ganhos_file(path, 200) --
+        # esse helper le headers/rows mas NAO devolve "path", fazendo
+        # com que toda importacao retornasse "path vazio" silenciosamente.
+        picked = self._pick_file_with_filters(
+            "Planilhas (*.xlsx;*.xlsm;*.xls;*.csv;*.txt;*.tsv)")
+        if not picked.get("ok"):
+            return {"ok": False,
+                    "error": picked.get("error") or "cancelado",
                     "imported": 0, "errors": []}
-        path = r.get("path") or ""
+        path = picked.get("path") or ""
         if not path:
-            return {"ok": False, "error": "path vazio", "imported": 0, "errors": []}
+            return {"ok": False, "error": "path vazio",
+                    "imported": 0, "errors": []}
         return self._import_excel_from_path(
             path, str(strategy or "ask").strip().lower())
 
