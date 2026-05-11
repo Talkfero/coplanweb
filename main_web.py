@@ -311,6 +311,17 @@ class CoplanApi:
         """Devolve o estado das 4 fontes (db, apoio, ganhos, tecnico_txt)
         + label/timestamp formatados para o header. JS usa isto para
         pintar os chips depois de cada API que muda fonte."""
+        # Lazy-disparo do auto-connect: _ensure_managers contem o
+        # auto-connect do banco a partir de config['obras'] no boot.
+        # Sem isto, na 1a chamada vinda do JS (antes de list_obras),
+        # o DataStateManager devolve NAO_CARREGADO para 'db' mesmo com
+        # o banco corretamente configurado, fazendo o tooltip do chip
+        # dizer "Status: Nao carregado" enquanto o nome do arquivo
+        # aparece no chip (vem de get_app_state, que le config direto).
+        try:
+            self._ensure_managers()
+        except Exception:  # noqa: BLE001
+            pass
         ds = self._get_data_state()
         if ds is None:
             return {"ok": False, "sources": {}, "error": "manager indisponivel"}
