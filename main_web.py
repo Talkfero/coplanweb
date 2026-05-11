@@ -27060,7 +27060,8 @@ def main() -> None:
     )
     # debug=True habilita o DevTools (F12 ou clique direito -> Inspect)
     # do Edge WebView2/WebKit. Util pra ver console.log e network.
-    webview.start(debug=True)
+    debug = (not getattr(sys, "frozen", False)) or os.environ.get("COPLAN_DEBUG") == "1"
+    webview.start(debug=debug)
 
 
 if __name__ == "__main__":
