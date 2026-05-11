@@ -24,6 +24,10 @@ hiddenimports = [
     "pythonnet",
     "pandas",
     "openpyxl",
+    "PySide6",
+    "PySide6.QtCore",
+    "PySide6.QtWidgets",
+    "PySide6.QtGui",
 ]
 
 a = Analysis(
@@ -35,7 +39,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["PySide6", "PyQt5", "PyQt6"],
+    excludes=["PyQt5", "PyQt6"],
     noarchive=False,
     optimize=0,
 )
