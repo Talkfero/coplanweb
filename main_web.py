@@ -17810,7 +17810,9 @@ COPLAN_BRIDGE_JS = """
   }
 
   function bindAll() {
-    bindToolbarLoadBdApoio();
+    // [REMOVIDO] bindToolbarLoadBdApoio(): botao "Carregar BD + Apoio"
+    // foi considerado desnecessario na aba Visualizar (conexao do banco
+    // ja' acontece no header e o apoio e' carregado pela aba Config).
     bindToolbarColunas();
     bindToolbarPacotes();
     bindToolbarPiora();
@@ -22099,15 +22101,40 @@ COPLAN_BRIDGE_JS = """
     }
 
     // Exportar Excel
+    // Respeita o escopo do filtro ativo em Visualizar: se ha' filtros
+    // aplicados (busca ou chips), exporta apenas os cods visiveis via
+    // export_detalhamento(cods). Caso contrario, exporta tudo.
     var btnExp = findHeaderBtnByTitle('exportar excel');
     if (btnExp && !btnExp.__pivoted) {
       btnExp.__pivoted = true;
       btnExp.addEventListener('click', function () {
-        if (!(api && api.header_export_excel)) return;
-        if (typeof window.coplanToast === 'function') {
-          window.coplanToast('Exportando todas as obras...', 'info');
+        if (!api) return;
+        var filtered = (typeof window.coplanFilteredCods === 'function')
+          ? window.coplanFilteredCods()
+          : null;
+        var hasFilter = Array.isArray(filtered);
+        if (hasFilter && filtered.length === 0) {
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast('Filtro atual nao retornou obras', 'warn');
+          }
+          return;
         }
-        api.header_export_excel().then(function (r) {
+        if (typeof window.coplanToast === 'function') {
+          window.coplanToast(
+            hasFilter
+              ? ('Exportando ' + filtered.length + ' obra(s) filtrada(s)...')
+              : 'Exportando todas as obras...',
+            'info');
+        }
+        var prom;
+        if (hasFilter && api.export_detalhamento) {
+          prom = api.export_detalhamento(filtered);
+        } else if (api.header_export_excel) {
+          prom = api.header_export_excel();
+        } else {
+          return;
+        }
+        prom.then(function (r) {
           if (r && r.ok && typeof window.coplanToast === 'function') {
             window.coplanToast('XLSX salvo: ' + r.path, 'info');
           } else if (r && typeof window.coplanToast === 'function') {
