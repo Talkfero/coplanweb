@@ -21914,47 +21914,83 @@ COPLAN_BRIDGE_JS = """
     var api = window.pywebview && window.pywebview.api;
 
     // Conectar Banco
+    // OK = selecionar .db existente (header_connect_db, com validacao)
+    // Cancelar = criar novo banco (db_create_new, com SAVE dialog
+    //            ou prompt de caminho). Ambos os caminhos terminam com
+    //            o banco conectado e reloadEverything() disparado.
     var btnConn = findHeaderBtnByTitle('conectar banco');
     if (btnConn && !btnConn.__pivoted) {
       btnConn.__pivoted = true;
       btnConn.addEventListener('click', function () {
-        if (!(api && api.header_connect_db)) return;
-        if (typeof window.coplanToast === 'function') {
-          window.coplanToast('Selecione o arquivo .db...', 'info');
-        }
-        api.header_connect_db().then(function (r) {
-          if (r && r.ok) {
-            if (typeof window.coplanToast === 'function') {
-              window.coplanToast('Conectado: ' + r.path, 'info');
-            }
-            reloadEverything();
-            // [F1] Auto-prompt choose_packages na 1a conexao com este
-            // banco (replica desktop load_last_obras que chama
-            // self.choose_packages() automaticamente). localStorage
-            // guarda paths ja vistos para nao perguntar de novo.
-            try {
-              var seen = JSON.parse(
-                localStorage.getItem('coplan.connected_paths') || '[]');
-              if (!Array.isArray(seen)) seen = [];
-              if (seen.indexOf(r.path) < 0) {
-                seen.push(r.path);
-                if (seen.length > 20) seen = seen.slice(-20);
-                localStorage.setItem('coplan.connected_paths',
-                                     JSON.stringify(seen));
-                // 1a conexao: oferece filtrar por pacote
-                setTimeout(function () {
-                  if (typeof window.coplanOpenChoosePackages
-                      === 'function') {
-                    window.coplanOpenChoosePackages();
-                  }
-                }, 500);
-              }
-            } catch (e) { /* sem localStorage / JSON erro */ }
-          } else if (r && r.error && r.error !== 'cancelado'
-                     && typeof window.coplanToast === 'function') {
-            window.coplanToast('Falha: ' + r.error, 'error');
+        if (!api) return;
+        var msg = 'Conectar Banco:\n\n'
+          + '  OK = SELECIONAR banco existente (.db)\n'
+          + '  Cancelar = CRIAR novo banco';
+        var existente = window.confirm(msg);
+
+        var onConnected = function (path) {
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast('Conectado: ' + path, 'info');
           }
-        });
+          document.dispatchEvent(new CustomEvent('coplan:config-empresa-saved'));
+          reloadEverything();
+          // [F1] Auto-prompt choose_packages na 1a conexao com este
+          // banco (replica desktop load_last_obras). localStorage guarda
+          // paths ja vistos para nao perguntar de novo.
+          try {
+            var seen = JSON.parse(
+              localStorage.getItem('coplan.connected_paths') || '[]');
+            if (!Array.isArray(seen)) seen = [];
+            if (seen.indexOf(path) < 0) {
+              seen.push(path);
+              if (seen.length > 20) seen = seen.slice(-20);
+              localStorage.setItem('coplan.connected_paths',
+                                   JSON.stringify(seen));
+              setTimeout(function () {
+                if (typeof window.coplanOpenChoosePackages === 'function') {
+                  window.coplanOpenChoosePackages();
+                }
+              }, 500);
+            }
+          } catch (e) { /* sem localStorage / JSON erro */ }
+        };
+
+        if (existente) {
+          if (!api.header_connect_db) return;
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast('Selecione o arquivo .db...', 'info');
+          }
+          api.header_connect_db().then(function (r) {
+            if (r && r.ok) {
+              onConnected(r.path);
+            } else if (r && r.error && r.error !== 'cancelado'
+                       && typeof window.coplanToast === 'function') {
+              window.coplanToast('Falha: ' + r.error, 'error');
+            }
+          });
+        } else {
+          if (!api.db_create_new) {
+            if (typeof window.coplanToast === 'function') {
+              window.coplanToast('API db_create_new indisponivel', 'error');
+            }
+            return;
+          }
+          // path vazio -> backend abre SAVE dialog
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast('Selecione o caminho do novo banco...', 'info');
+          }
+          api.db_create_new('').then(function (r) {
+            if (r && r.ok) {
+              if (typeof window.coplanToast === 'function') {
+                window.coplanToast('Novo banco criado: ' + r.path, 'info');
+              }
+              onConnected(r.path);
+            } else if (r && r.error && r.error !== 'cancelado'
+                       && typeof window.coplanToast === 'function') {
+              window.coplanToast('Falha: ' + r.error, 'error');
+            }
+          });
+        }
       });
     }
 
@@ -25012,80 +25048,20 @@ COPLAN_BRIDGE_JS = """
     document.addEventListener('coplan:user-changed', applyUserAndCompany);
     window.coplanRefreshUserCompany = applyUserAndCompany;
 
-    // [FIX 4] Botao "Conectar Banco" (icon plug-zap no header). Antes
-    // sem handler — agora abre file dialog para escolher .db, salva em
-    // config.obras e recarrega.
+    // [FIX 4] Botao "Conectar Banco" (icon plug-zap no header).
+    // [REMOVIDO] o handler completo migrou para bindHeaderButtons
+    // (Conectar Banco) que ja' faz OK=selecionar / Cancelar=criar via
+    // db_create_new + auto-connect. Mantemos o stub que so' marca o
+    // botao como "bound" para garantir que nao haja duplo-bind em
+    // re-runs deste IIFE.
     function bindConectarBanco() {
       var btns = document.querySelectorAll('.header .btn-icon');
-      var btn = null;
       for (var i = 0; i < btns.length; i++) {
         if ((btns[i].title || '').toLowerCase().indexOf('conectar') === 0) {
-          btn = btns[i]; break;
+          btns[i].__coplanBound = true;
+          break;
         }
       }
-      if (!btn || btn.__coplanBound) return;
-      btn.__coplanBound = true;
-      btn.addEventListener('click', function () {
-        var a = window.pywebview && window.pywebview.api;
-        if (!a) return;
-        var msg = 'Conectar Banco:\\n\\n'
-          + '  OK = SELECIONAR banco existente (.db)\\n'
-          + '  Cancelar = CRIAR novo banco';
-        var existente = window.confirm(msg);
-        if (existente) {
-          if (!a.pick_db_file) {
-            return window.coplanToast && window.coplanToast(
-              'API pick_db_file indisponivel', 'error');
-          }
-          a.pick_db_file().then(function (r) {
-            if (!r || !r.path || !a.save_config_empresa) return;
-            a.save_config_empresa({ caminho_db: r.path }).then(function () {
-              if (window.coplanToast) {
-                window.coplanToast('Banco conectado: ' + r.path, 'success');
-              }
-              document.dispatchEvent(new CustomEvent('coplan:config-empresa-saved'));
-              if (window.coplanLoadObras) window.coplanLoadObras();
-              if (window.coplanRefreshChips) window.coplanRefreshChips();
-            });
-          });
-        } else {
-          // CRIAR novo banco — pede caminho via prompt e cria via
-          // backend (db_create_new) se disponivel; senao orienta.
-          var path = window.prompt(
-            'Caminho do NOVO banco SQLite (terminado em .db):\\n'
-            + 'Ex.: C:\\\\Users\\\\<voce>\\\\Documents\\\\coplan_2026.db'
-          );
-          if (!path) return;
-          if (!a.db_create_new) {
-            // Sem API dedicada — tenta save_config_empresa apontando
-            // para o novo path; o auto-load vai criar o schema na
-            // primeira conexao.
-            a.save_config_empresa({ caminho_db: path }).then(function () {
-              if (window.coplanToast) {
-                window.coplanToast(
-                  'Apontando para ' + path + '. Schema sera criado na 1a conexao.',
-                  'info');
-              }
-              document.dispatchEvent(new CustomEvent('coplan:config-empresa-saved'));
-              if (window.coplanLoadObras) window.coplanLoadObras();
-              if (window.coplanRefreshChips) window.coplanRefreshChips();
-            });
-          } else {
-            a.db_create_new(path).then(function (r) {
-              if (r && r.ok) {
-                if (window.coplanToast) {
-                  window.coplanToast('Novo banco criado: ' + path, 'success');
-                }
-                document.dispatchEvent(new CustomEvent('coplan:config-empresa-saved'));
-                if (window.coplanLoadObras) window.coplanLoadObras();
-              } else if (window.coplanToast) {
-                window.coplanToast(
-                  'Falha: ' + (r && r.error || '?'), 'error');
-              }
-            });
-          }
-        }
-      });
     }
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', bindConectarBanco);
