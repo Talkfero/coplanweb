@@ -1,0 +1,1986 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>COPLAN — Migração UI</title>
+<meta name="viewport" content="width=1440, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<style>
+  :root {
+    --bg: oklch(0.985 0.003 250);
+    --surface: #ffffff;
+    --surface-2: oklch(0.975 0.004 250);
+    --surface-3: oklch(0.955 0.006 250);
+    --border: oklch(0.91 0.01 250);
+    --border-strong: oklch(0.85 0.012 250);
+    --text: oklch(0.22 0.02 255);
+    --text-muted: oklch(0.5 0.02 255);
+    --text-soft: oklch(0.62 0.015 255);
+    --primary: oklch(0.32 0.07 255);
+    --primary-2: oklch(0.27 0.075 255);
+    --primary-soft: oklch(0.96 0.02 255);
+    --accent: oklch(0.55 0.13 250);
+    --accent-hover: oklch(0.5 0.14 250);
+    --success: oklch(0.62 0.13 155);
+    --success-soft: oklch(0.96 0.04 155);
+    --warning: oklch(0.75 0.14 85);
+    --warning-soft: oklch(0.97 0.05 85);
+    --danger: oklch(0.58 0.18 25);
+    --danger-soft: oklch(0.97 0.04 25);
+    --info: oklch(0.6 0.13 230);
+    --info-soft: oklch(0.96 0.035 230);
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12), 0 4px 8px rgba(15, 23, 42, 0.06);
+    --radius: 8px;
+    --radius-sm: 6px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "JetBrains Mono", monospace; font-feature-settings: "tnum"; }
+  button { font-family: inherit; font-size: inherit; cursor: pointer; }
+
+  /* ===== Layout shell ===== */
+  .app {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: 52px 1fr 32px;
+    grid-template-areas:
+      "sidebar header"
+      "sidebar main"
+      "sidebar status";
+    height: 100vh;
+    min-height: 760px;
+  }
+  .app.collapsed { grid-template-columns: 64px 1fr; }
+
+  /* Modo cenario ativo: realce visual em todo o app (border laranja
+     + leve hue na sidebar) para o usuario nao esquecer que esta
+     editando dentro de um cenario. Adicionado por JS via classe
+     .app.cenario-ativo */
+  .app.cenario-ativo { box-shadow: inset 0 0 0 4px oklch(0.72 0.20 55); }
+  .app.cenario-ativo .header { box-shadow: inset 0 -2px 0 oklch(0.72 0.20 55); }
+  .app.cenario-ativo .sidebar { background: linear-gradient(180deg, var(--primary) 0%, var(--primary) 70%, oklch(0.40 0.13 80) 100%); }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    grid-area: sidebar;
+    background: var(--primary);
+    color: #e8eef9;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid oklch(0.25 0.06 255);
+  }
+  .sb-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px 14px 18px;
+    border-bottom: 1px solid oklch(0.27 0.06 255);
+    height: 52px;
+  }
+  .sb-logo {
+    width: 30px; height: 30px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, oklch(0.62 0.16 230), oklch(0.55 0.13 250));
+    display: grid; place-items: center;
+    color: white; font-weight: 700; font-size: 13px;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.1) inset;
+  }
+  .sb-title { font-size: 14px; font-weight: 700; letter-spacing: 0.02em; }
+  .sb-sub { font-size: 10.5px; color: oklch(0.78 0.04 255); margin-top: 1px; letter-spacing: 0.02em;}
+
+  .sb-section-label {
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: oklch(0.7 0.05 255);
+    padding: 14px 18px 6px;
+  }
+  .sb-nav { padding: 8px 8px; flex: 1; overflow-y: auto;}
+  .sb-item {
+    display: flex; align-items: center; gap: 11px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    color: oklch(0.85 0.03 255);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    margin-bottom: 1px;
+    position: relative;
+  }
+  .sb-item:hover { background: oklch(0.27 0.07 255); color: #fff; }
+  .sb-item.active {
+    background: oklch(0.24 0.08 255);
+    color: #fff;
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  .sb-item .lucide { width: 17px; height: 17px; flex-shrink: 0; }
+  .sb-item-badge {
+    margin-left: auto;
+    font-size: 10px; font-weight: 600;
+    background: oklch(0.45 0.12 250);
+    color: white;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+  .sb-footer {
+    border-top: 1px solid oklch(0.27 0.06 255);
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px;
+  }
+  .sb-user-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: oklch(0.62 0.13 250);
+    display: grid; place-items: center;
+    color: white; font-weight: 600; font-size: 11px;
+  }
+  .sb-user-name { color: white; font-weight: 600; }
+  .sb-user-role { color: oklch(0.72 0.04 255); font-size: 11px; }
+
+  .app.collapsed .sb-title,
+  .app.collapsed .sb-sub,
+  .app.collapsed .sb-section-label,
+  .app.collapsed .sb-item span,
+  .app.collapsed .sb-item-badge,
+  .app.collapsed .sb-user-info { display: none; }
+  .app.collapsed .sb-item { justify-content: center; padding: 10px; }
+  .app.collapsed .sb-brand { justify-content: center; padding: 14px 0; }
+
+  /* ===== Header ===== */
+  .header {
+    grid-area: header;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 14px;
+  }
+  .h-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 6px;
+    border-radius: 6px;
+    color: var(--text-muted);
+    display: grid; place-items: center;
+  }
+  .h-toggle:hover { background: var(--surface-3); color: var(--text); }
+  .h-context {
+    display: flex; flex-direction: column;
+    line-height: 1.15;
+  }
+  .h-breadcrumb {
+    font-size: 11.5px;
+    color: var(--text-soft);
+    font-weight: 500;
+  }
+  .h-page-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .h-spacer { flex: 1; }
+
+  .h-source-pills { display: flex; gap: 8px; }
+  .src-pill {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 10px 5px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+  }
+  .src-pill.ok { background: var(--success-soft); color: oklch(0.4 0.12 155); border-color: oklch(0.85 0.08 155); }
+  .src-pill.warn { background: var(--warning-soft); color: oklch(0.45 0.12 70); border-color: oklch(0.85 0.1 80);}
+  .src-pill.err { background: var(--danger-soft); color: oklch(0.45 0.16 25); border-color: oklch(0.85 0.1 25);}
+  .src-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .src-pill .lucide { width: 13px; height: 13px; }
+
+  .h-divider { width: 1px; height: 24px; background: var(--border);}
+
+  /* ===== Buttons ===== */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 500;
+    font-size: 12.5px;
+    transition: all 0.12s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface-3); border-color: var(--border-strong); }
+  .btn .lucide { width: 14px; height: 14px; }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--text-muted); }
+  .btn.ghost:hover { background: var(--surface-3); color: var(--text); }
+  .btn.danger { color: var(--danger); border-color: oklch(0.85 0.1 25); background: var(--surface);}
+  .btn.danger:hover { background: var(--danger-soft); }
+  .btn.sm { padding: 4px 9px; font-size: 11.5px; }
+  .btn-icon {
+    width: 30px; height: 30px;
+    padding: 0;
+    display: grid; place-items: center;
+  }
+
+  /* ===== Main area ===== */
+  .main {
+    grid-area: main;
+    overflow: auto;
+    background: var(--bg);
+  }
+  .page { padding: 18px 22px 24px; max-width: 100%; }
+
+  /* ===== Status bar ===== */
+  .status {
+    grid-area: status;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 14px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+  .status .item { display: flex; align-items: center; gap: 6px; }
+  .status .item .lucide { width: 12px; height: 12px;}
+  .status .sep { width: 1px; height: 14px; background: var(--border);}
+  .status .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 0 oklch(0.62 0.13 155 / 0.5);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 oklch(0.62 0.13 155 / 0.5); }
+    70% { box-shadow: 0 0 0 5px oklch(0.62 0.13 155 / 0); }
+    100% { box-shadow: 0 0 0 0 oklch(0.62 0.13 155 / 0); }
+  }
+
+  /* ===== Cards & sections ===== */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .card-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .lucide { width: 15px; height: 15px; color: var(--accent);}
+  .card-sub { font-size: 11.5px; color: var(--text-soft); }
+  .card-body { padding: 16px; }
+
+  /* ===== Tabs (subnav) ===== */
+  .subnav {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+    padding: 0 2px;
+  }
+  .subnav-tab {
+    padding: 8px 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .subnav-tab:hover { color: var(--text); }
+  .subnav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ===== Filter chips ===== */
+  .filter-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .search-input {
+    flex: 1;
+    min-width: 280px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+  }
+  .search-input:focus-within { border-color: var(--accent); background: white; box-shadow: 0 0 0 3px oklch(0.55 0.13 250 / 0.12);}
+  .search-input input {
+    border: none; outline: none; background: transparent;
+    flex: 1; font-size: 13px; font-family: inherit;
+    color: var(--text);
+  }
+  .search-input .lucide { width: 15px; height: 15px; color: var(--text-soft);}
+  .search-input kbd {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    background: var(--surface-3);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--text-soft);
+  }
+  .filter-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px 5px 9px;
+    background: var(--info-soft);
+    color: oklch(0.38 0.13 230);
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    border: 1px solid oklch(0.85 0.06 230);
+  }
+  .filter-chip .x { cursor: pointer; opacity: 0.7;}
+  .filter-chip .x:hover { opacity: 1;}
+  .filter-chip .lucide { width: 11px; height: 11px;}
+
+  /* ===== Stat cards ===== */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin-bottom: 14px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px;
+  }
+  .stat-label { font-size: 11.5px; color: var(--text-soft); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;}
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--text); margin-top: 4px; letter-spacing: -0.01em;}
+  .stat-delta { font-size: 11px; margin-top: 2px; font-weight: 500;}
+  .stat-delta.up { color: var(--success); }
+  .stat-delta.down { color: var(--danger); }
+  .stat-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: grid; place-items: center;
+    background: var(--info-soft);
+    color: var(--info);
+    flex-shrink: 0;
+  }
+  .stat-icon.green { background: var(--success-soft); color: var(--success);}
+  .stat-icon.amber { background: var(--warning-soft); color: oklch(0.55 0.14 80);}
+  .stat-icon.violet { background: oklch(0.96 0.04 290); color: oklch(0.5 0.18 290);}
+
+  /* ===== Tables ===== */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;}
+  .table-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-toolbar { display: flex; gap: 6px; align-items: center;}
+  /* Altura calc-based: tabela cresce dinamicamente sem deixar area
+     vazia abaixo. Banner full-width foi removido em 2026-05-08
+     (badge ficou na sidebar). */
+  .table-scroll {
+    overflow: auto;
+    height: calc(100vh - 380px);
+    min-height: 240px;
+  }
+  table.data {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+    /* table-layout: fixed faz <th>/<col> definirem a largura, e o
+       conteudo das celulas TRUNCA via overflow:hidden + ellipsis ao
+       inves de empurrar a coluna. Sem isto, largura minima da coluna
+       vira o conteudo mais largo da linha (impede reduzir e quebra
+       persistencia). */
+    table-layout: fixed;
+  }
+  table.data tbody td {
+    /* min-width:0 permite a coluna reduzir; overflow + ellipsis
+       trunca conteudo respeitando largura fixada do <th>. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.data thead th {
+    position: sticky; top: 0;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-strong);
+    white-space: nowrap;
+    z-index: 2;
+    overflow: hidden;
+    min-width: 60px;
+    /* Resize handle customizado (.col-resizer) faz drag-to-resize via JS */
+    position: sticky;
+    box-sizing: border-box;
+  }
+  table.data thead th.check { min-width: 36px; }
+  /* Handle de redimensionamento na borda direita da coluna */
+  .col-resizer {
+    position: absolute;
+    top: 0; right: 0;
+    width: 6px; height: 100%;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 3;
+    background: transparent;
+    transition: background-color .12s;
+  }
+  .col-resizer:hover { background: var(--accent); opacity: .35; }
+  .col-resizer.resizing { background: var(--accent); opacity: .7; }
+  /* th precisa ser position:relative para o handle absolute fixar dentro */
+  table.data thead th { position: relative; }
+  /* Sticky precisa ser preservado no top — usar top via class */
+  table.data thead th { top: 0; }
+  body.coplan-resizing { cursor: col-resize !important; user-select: none; }
+  table.data tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  table.data tbody tr:hover { background: var(--primary-soft);}
+  table.data tbody tr.selected { background: oklch(0.94 0.04 250);}
+  table.data tbody tr.selected td { color: var(--text);}
+  /* Visualizar Sprint 1 (Auditoria M4): pinta TODAS as celulas em
+     vermelho quando obra nao atendeu criterios (paridade desktop
+     filtros_paginacao_mixin.py:122-132 que faz item.setForeground em
+     toda a linha). */
+  table.data tbody tr.failed td { color: var(--danger);}
+  /* [C10/H1] Linha cinza (atende===null) = dados insuficientes para
+     avaliar criterios. Cor mais clara que normal mas distinta de failed. */
+  table.data tbody tr.indef td { color: oklch(0.55 0.02 240);}
+  table.data tbody tr.indef td.cod,
+  table.data tbody tr.indef td.projeto { color: oklch(0.45 0.02 240); font-style: italic;}
+  table.data .num { text-align: right; font-family: "JetBrains Mono", monospace; font-feature-settings: "tnum";}
+  table.data .check { width: 36px; padding-left: 16px;}
+  table.data .check input { accent-color: var(--accent);}
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    background: var(--surface-3);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .badge.success { background: var(--success-soft); color: oklch(0.4 0.12 155); border-color: oklch(0.85 0.08 155);}
+  .badge.warning { background: var(--warning-soft); color: oklch(0.45 0.12 70); border-color: oklch(0.85 0.1 80);}
+  .badge.danger { background: var(--danger-soft); color: oklch(0.45 0.16 25); border-color: oklch(0.85 0.1 25);}
+  .badge.info { background: var(--info-soft); color: oklch(0.4 0.13 230); border-color: oklch(0.85 0.07 230);}
+  .badge.violet { background: oklch(0.96 0.04 290); color: oklch(0.45 0.16 290); border-color: oklch(0.85 0.07 290);}
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.85;}
+
+  /* ===== Form ===== */
+  .form-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px;}
+  .field { display: flex; flex-direction: column; gap: 5px;}
+  .field label {
+    font-size: 11.5px; font-weight: 500; color: var(--text-muted);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .field label .req { color: var(--danger);}
+  .field label .lucide { width: 11px; height: 11px; color: var(--text-soft);}
+  .input, .select, .textarea {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text);
+    outline: none;
+    transition: border 0.1s, box-shadow 0.1s;
+  }
+  .input:focus, .select:focus, .textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px oklch(0.55 0.13 250 / 0.12);
+  }
+  .input:disabled { background: var(--surface-3); color: var(--text-soft); }
+  .textarea { min-height: 70px; resize: vertical; font-family: inherit;}
+  .input.with-suffix { padding-right: 30px; }
+  .input-group { position: relative;}
+  .input-group .suffix { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-soft); font-size: 11.5px;}
+  .input-row { display: flex; gap: 8px; align-items: stretch;}
+  .input-row .input { flex: 1;}
+
+  .helper { font-size: 11px; color: var(--text-soft);}
+
+  .pill-row { display: flex; gap: 6px; flex-wrap: wrap;}
+  .pill {
+    padding: 4px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .pill:hover { background: var(--surface-3); color: var(--text);}
+  .pill.active {
+    background: var(--accent); border-color: var(--accent); color: white;
+  }
+
+  .col-1 { grid-column: span 1;} .col-2 { grid-column: span 2;}
+  .col-3 { grid-column: span 3;} .col-4 { grid-column: span 4;}
+  .col-5 { grid-column: span 5;} .col-6 { grid-column: span 6;}
+  .col-7 { grid-column: span 7;} .col-8 { grid-column: span 8;}
+  .col-9 { grid-column: span 9;} .col-12 { grid-column: span 12;}
+
+  .switch {
+    position: relative; width: 32px; height: 18px;
+    background: var(--border-strong);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    background: white; border-radius: 50%;
+    transition: left 0.15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .switch.on { background: var(--accent);}
+  .switch.on::after { left: 16px;}
+
+  /* ===== Two-column for Cadastro ===== */
+  .cadastro-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ===== Lists (alimentadores) ===== */
+  .chip-list {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    padding: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 80px;
+    max-height: 130px;
+    overflow-y: auto;
+    align-content: flex-start;
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px 3px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-family: "JetBrains Mono", monospace;
+    color: var(--text);
+  }
+  .chip .x {
+    color: var(--text-soft); cursor: pointer;
+    width: 14px; height: 14px;
+    display: grid; place-items: center;
+    border-radius: 3px;
+  }
+  .chip .x:hover { background: var(--danger-soft); color: var(--danger);}
+
+  /* ===== Resumo ===== */
+  .vol-grid {
+    display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px;
+  }
+  .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;}
+  .kpi {
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .kpi-label { font-size: 11px; color: var(--text-soft); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;}
+  .kpi-value { font-size: 18px; font-weight: 700; margin-top: 4px; font-family: "JetBrains Mono", monospace; font-feature-settings: "tnum";}
+  .kpi-unit { font-size: 12px; color: var(--text-soft); font-weight: 500;}
+
+  .bar-chart { display: flex; flex-direction: column; gap: 8px;}
+  .bar-item { display: grid; grid-template-columns: 130px 1fr 80px; align-items: center; gap: 12px; font-size: 12px;}
+  .bar-track { height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), oklch(0.6 0.15 230)); border-radius: 4px;}
+  .bar-value { font-family: "JetBrains Mono", monospace; font-feature-settings: "tnum"; text-align: right; color: var(--text-muted); font-size: 11.5px;}
+
+  /* ===== Ganhos table ===== */
+  .ganhos-table { width: 100%; border-collapse: collapse; font-size: 12.5px;}
+  .ganhos-table th, .ganhos-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left;}
+  .ganhos-table th { font-size: 11px; color: var(--text-soft); font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;}
+  .ganhos-table th.col-antes, .ganhos-table th.col-depois { text-align: center; width: 130px;}
+  .ganhos-table td.col-antes, .ganhos-table td.col-depois { text-align: center;}
+  .ganhos-table td.col-antes input, .ganhos-table td.col-depois input {
+    width: 100%; max-width: 110px;
+    text-align: center; font-family: "JetBrains Mono", monospace;
+  }
+  .ganhos-table td.label { font-weight: 500; color: var(--text);}
+  .ganhos-table td.delta { font-family: "JetBrains Mono", monospace; font-feature-settings: "tnum"; text-align: right; padding-right: 16px;}
+  .ganhos-table td.delta.up { color: var(--success);}
+  .ganhos-table td.delta.down { color: var(--danger);}
+
+  /* ===== Modal ===== */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: grid; place-items: center;
+    z-index: 100;
+    backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: min(560px, 92vw);
+    overflow: hidden;
+  }
+  .modal.lg { width: min(820px, 92vw);}
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-title { font-size: 14px; font-weight: 600;}
+  .modal-body { padding: 18px 20px; max-height: 60vh; overflow-y: auto;}
+  .modal-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 8px;
+    background: var(--surface-2);
+  }
+
+  /* ===== Misc ===== */
+  .row { display: flex; align-items: center; gap: 10px;}
+  .gap-2 { gap: 10px;} .gap-1 { gap: 6px;}
+  .mt-2 { margin-top: 10px;} .mt-3 { margin-top: 14px;}
+  .grow { flex: 1;}
+  .legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--text-muted);}
+  .legend-dot { display: inline-flex; align-items: center; gap: 5px;}
+  .legend-dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .legend-dot.danger { color: var(--danger);}
+  .legend-dot.text { color: var(--text);}
+
+  /* hide tabs that are not active */
+  .tab-panel { display: none;}
+  .tab-panel.active { display: block;}
+
+  /* Toast */
+  .toast {
+    position: fixed; right: 18px; bottom: 50px;
+    background: var(--text); color: white;
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 12.5px;
+    z-index: 200;
+    display: none;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.2s ease-out;
+  }
+  .toast.show { display: flex; align-items: center; gap: 8px;}
+  @keyframes slideUp { from { transform: translateY(8px); opacity: 0;} to { transform: translateY(0); opacity: 1;}}
+
+  /* Pagination */
+  .pagination {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-muted);
+  }
+  .page-btns { display: flex; gap: 4px; align-items: center;}
+
+  /* GroupBox-like fieldset */
+  .fieldset {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px 16px;
+    background: var(--surface);
+  }
+  .fieldset > legend {
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-left: -2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="sb-logo">CP</div>
+      <div>
+        <div class="sb-title">COPLAN</div>
+        <div class="sb-sub">Obras Elétricas</div>
+      </div>
+    </div>
+
+    <div class="sb-section-label">Operação</div>
+    <nav class="sb-nav">
+      <button class="sb-item active" data-tab="visualizar">
+        <i data-lucide="layout-grid"></i><span>Visualizar Obras</span>
+        <span class="sb-item-badge" style="display:none;"></span>
+      </button>
+      <button class="sb-item" data-tab="cadastro">
+        <i data-lucide="file-plus-2"></i><span>Cadastro de Obras</span>
+      </button>
+      <button class="sb-item" data-tab="ganhos">
+        <i data-lucide="trending-up"></i><span>Ganhos</span>
+      </button>
+      <button class="sb-item" data-tab="resumo">
+        <i data-lucide="bar-chart-3"></i><span>Resumo / Volumetria</span>
+      </button>
+
+      <div class="sb-section-label">Sistema</div>
+      <button class="sb-item" data-tab="config">
+        <i data-lucide="settings"></i><span>Configurações</span>
+      </button>
+      <button class="sb-item" id="btn-modal-pi">
+        <i data-lucide="database"></i><span>Gerenciar PI_BASE</span>
+      </button>
+      <button class="sb-item" id="btn-help">
+        <i data-lucide="life-buoy"></i><span>Ajuda</span>
+      </button>
+    </nav>
+
+    <!-- Badge de modo de edição: aparece SEMPRE (Banco principal/Cenário),
+         posicionado ANTES do nome do usuário no footer da sidebar.
+         Layout vertical compacto: cabe na sidebar de 240px sem cortar. -->
+    <div id="sb-cenario-badge" data-modo="banco" style="margin:8px 12px 0;padding:8px 10px;border-radius:8px;color:white;box-shadow:0 2px 6px rgba(0,0,0,.18);background:linear-gradient(180deg, oklch(0.55 0.13 155) 0%, oklch(0.48 0.13 155) 100%);">
+      <div id="sb-cenario-label" style="display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;opacity:.95;line-height:1.1;">
+        <i data-lucide="database" style="width:11px;height:11px;flex-shrink:0;"></i>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Banco principal</span>
+      </div>
+      <div id="sb-cenario-nome" class="mono" style="margin-top:3px;font-weight:700;font-size:12px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">edição direta</div>
+      <div id="sb-cenario-stats" style="margin-top:2px;font-size:10px;opacity:.85;line-height:1.2;display:none;"></div>
+      <button id="sb-cenario-sair" type="button" style="display:none;margin-top:6px;width:100%;background:white;color:oklch(0.40 0.20 50);border:none;border-radius:5px;padding:4px 8px;font-size:10.5px;font-weight:600;cursor:pointer;display:none;align-items:center;justify-content:center;gap:4px;">
+        <i data-lucide="x-circle" style="width:11px;height:11px;"></i> Sair do cenário
+      </button>
+    </div>
+    <div class="sb-footer">
+      <div class="sb-user-avatar">—</div>
+      <div class="sb-user-info">
+        <div class="sb-user-name">—</div>
+        <div class="sb-user-role">—</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ HEADER ============ -->
+  <header class="header">
+    <button class="h-toggle" id="toggle-sidebar" title="Recolher menu">
+      <i data-lucide="panel-left"></i>
+    </button>
+    <div class="h-context">
+      <div class="h-breadcrumb">Operação · <span id="bc-path">Visualizar Obras</span></div>
+      <div class="h-page-title" id="page-title">Visualizar Obras</div>
+    </div>
+    <div class="h-spacer"></div>
+
+    <div class="h-source-pills" id="src-pills">
+      <div class="src-pill" id="pill-db" data-source="db" title="Banco de dados"><i data-lucide="database"></i>Banco<span class="mono" style="opacity:.7" id="pill-db-name">—</span></div>
+      <div class="src-pill" id="pill-tecnico" data-source="tecnico_txt" title="Arquivos técnicos (TXT)"><i data-lucide="clock"></i>Técnico<span style="opacity:.7" id="pill-tecnico-name">—</span></div>
+    </div>
+
+    <!-- Cenários: combo no header (modo isolado de edição) -->
+    <div class="h-cenario" id="h-cenario-wrap" style="display:flex;align-items:center;gap:6px;margin-left:8px;">
+      <i data-lucide="layers" style="width:14px;height:14px;color:var(--text-soft);" title="Cenário ativo"></i>
+      <select id="header-cenario" class="select" style="height:28px;padding:0 8px;font-size:12px;min-width:160px;" title="Selecionar cenário">
+        <option value="">— Sem cenário —</option>
+      </select>
+    </div>
+
+    <div class="h-divider"></div>
+
+    <button class="btn ghost btn-icon" title="Conectar Banco"><i data-lucide="plug-zap"></i></button>
+    <button class="btn ghost btn-icon" title="Importar Excel"><i data-lucide="download"></i></button>
+    <button class="btn ghost btn-icon" title="Exportar Excel"><i data-lucide="upload"></i></button>
+    <button class="btn primary" id="btn-salvar-global">
+      <i data-lucide="save"></i> Salvar
+    </button>
+  </header>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="page">
+
+      <!-- ===== TAB: VISUALIZAR ===== -->
+      <section class="tab-panel active" id="tab-visualizar">
+        <div class="stats-grid">
+          <div class="stat" data-stat="total">
+            <div>
+              <div class="stat-label">Obras no banco</div>
+              <div class="stat-value" data-stat-value>—</div>
+              <div class="stat-delta" data-stat-delta></div>
+            </div>
+            <div class="stat-icon"><i data-lucide="layers"></i></div>
+          </div>
+          <div class="stat" data-stat="aprovadas">
+            <div>
+              <div class="stat-label">Aprovadas</div>
+              <div class="stat-value" data-stat-value>—</div>
+              <div class="stat-delta" data-stat-delta></div>
+            </div>
+            <div class="stat-icon green"><i data-lucide="check-circle-2"></i></div>
+          </div>
+          <div class="stat" data-stat="pendentes">
+            <div>
+              <div class="stat-label">Em análise / pendentes</div>
+              <div class="stat-value" data-stat-value>—</div>
+              <div class="stat-delta" data-stat-delta></div>
+            </div>
+            <div class="stat-icon amber"><i data-lucide="alert-triangle"></i></div>
+          </div>
+          <div class="stat" data-stat="valor">
+            <div>
+              <div class="stat-label">Valor planejado</div>
+              <div class="stat-value" data-stat-value>—</div>
+              <div class="stat-delta" data-stat-delta></div>
+            </div>
+            <div class="stat-icon violet"><i data-lucide="banknote"></i></div>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-input">
+            <i data-lucide="search"></i>
+            <input id="filter-input" type="text" placeholder="Busca inteligente em todos os campos (use ; para múltiplos termos)" />
+            <kbd>Ctrl</kbd><kbd>F</kbd>
+          </div>
+          <button class="btn" id="btn-modal-filtros"><i data-lucide="filter"></i> Filtros avançados</button>
+          <!-- Botao "Colunas" REMOVIDO do mock: o JS injeta um equivalente
+               funcional (#coplan-btn-config-cols) que persiste config.json. -->
+          <button class="btn ghost"><i data-lucide="x"></i> Limpar</button>
+        </div>
+
+        <div class="filter-bar" id="filter-chips-bar" style="padding: 8px 14px; gap: 6px;">
+          <span style="font-size:11.5px;color:var(--text-soft);font-weight:500;">Filtros ativos:</span>
+          <span id="filter-chips-list" style="display:contents;"></span>
+          <span class="grow"></span>
+          <span class="badge info" id="filter-chips-count">—</span>
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-header">
+            <div class="row">
+              <strong style="font-size:13px">Obras</strong>
+              <span class="badge" id="obras-table-count">—</span>
+            </div>
+            <div class="table-toolbar">
+              <button class="btn sm"><i data-lucide="refresh-ccw"></i> Atualizar</button>
+              <button class="btn sm"><i data-lucide="file-bar-chart"></i> Detalhamento</button>
+              <button class="btn sm"><i data-lucide="file-spreadsheet"></i> Relatório Critérios</button>
+              <button class="btn sm"><i data-lucide="file-text"></i> Nota de Colapso</button>
+              <button class="btn sm danger"><i data-lucide="trash-2"></i> Excluir</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="data" id="obras-table">
+              <thead>
+                <tr>
+                  <th class="check"><input type="checkbox" id="check-all" /></th>
+                  <th>COD</th>
+                  <th>Ano</th>
+                  <th>PI</th>
+                  <th style="min-width:300px;">Projeto</th>
+                  <th>Alimentador</th>
+                  <th>SE</th>
+                  <th>Regional</th>
+                  <th>Pacote</th>
+                  <th class="num">Valor (R$)</th>
+                  <th>Critérios</th>
+                  <th>Aprovada</th>
+                  <th>Téc.</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="obras-tbody"></tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <div class="legend">
+              <span class="legend-dot danger">Não atendeu critérios</span>
+              <span class="legend-dot text">Atendeu critérios</span>
+              <span class="legend-dot" style="color: oklch(0.55 0.02 240); font-style: italic;">Dados insuficientes</span>
+            </div>
+            <div class="page-btns">
+              <span style="margin-right:8px;">Itens por página:
+                <select class="select" style="display:inline-block;width:auto;padding:3px 6px;font-size:11.5px;">
+                  <option>100</option><option selected>300</option><option>500</option><option>1000</option>
+                </select>
+              </span>
+              <button class="btn sm ghost" id="obras-pg-prev"><i data-lucide="chevron-left"></i></button>
+              <span class="mono" style="padding:0 8px;" id="obras-pg-label">— / —</span>
+              <button class="btn sm ghost" id="obras-pg-next"><i data-lucide="chevron-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== TAB: CADASTRO ===== -->
+      <section class="tab-panel" id="tab-cadastro">
+        <!-- [F16] Barra de navegacao do modo "Atualizar Projeto"
+             (replica iniciar_atualizacao_projeto + prev/next/finalizar
+             do desktop). Hidden por default; aparece quando user
+             aciona via menu contextual de linha em Visualizar. -->
+        <div id="cad-projeto-nav-bar" style="display:none;
+            background: oklch(0.96 0.04 80);
+            border: 1px solid oklch(0.85 0.1 80);
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 13px;">
+          <i data-lucide="layers"></i>
+          <strong>Atualizar Projeto:</strong>
+          <span id="cad-projeto-nav-info" class="mono"
+                style="color: var(--text-soft);">—</span>
+          <span class="grow" style="flex:1"></span>
+          <button class="btn sm" id="cad-projeto-nav-prev" type="button"
+                  title="Voltar para obra anterior do projeto">
+            <i data-lucide="chevron-left"></i> Anterior
+          </button>
+          <button class="btn sm" id="cad-projeto-nav-next" type="button"
+                  title="Avancar para proxima obra (salva snapshot atual)">
+            Proxima <i data-lucide="chevron-right"></i>
+          </button>
+          <button class="btn sm primary" id="cad-projeto-nav-finalizar"
+                  type="button"
+                  style="display:none;"
+                  title="Salva todas as obras editadas no banco">
+            <i data-lucide="check"></i> Finalizar
+          </button>
+          <button class="btn sm danger" id="cad-projeto-nav-cancelar"
+                  type="button"
+                  title="Descarta edicoes e sai do modo">
+            <i data-lucide="x"></i> Cancelar
+          </button>
+        </div>
+        <div class="cadastro-grid">
+          <div>
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="file-plus-2"></i> Dados Básicos da Obra</div>
+                <span class="grow"></span>
+                <!-- Modo de salvamento: toggle entre Editar (UPDATE) e Salvar
+                     como NOVA (INSERT, mantém todos os campos preenchidos
+                     mas zera o cod p/ gerar novo). Visivel sempre que ha
+                     obra em edicao (state.obraEmEdicao). -->
+                <button class="btn ghost sm" id="cad-btn-modo-nova" type="button"
+                        style="margin-right:6px;display:inline-flex;align-items:center;gap:4px;"
+                        title="Aproveitar os dados do form atual (mesmo se carregado de uma obra existente) para criar uma NOVA obra (gera novo COD ao salvar).">
+                  <i data-lucide="copy-plus"></i> Salvar como NOVA
+                </button>
+                <span class="badge info" id="cad-badge-modo">Nova obra</span>
+              </div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="field col-2">
+                    <label>Ano <span class="req">*</span></label>
+                    <!-- JS loadOptions popula com current..+10. Vazio por default. -->
+                    <select class="select" id="cad-sel-ano"></select>
+                  </div>
+                  <div class="field col-7">
+                    <label>Projeto de Investimento <span class="req">*</span></label>
+                    <!-- JS loadOptions popula via cadastro_form_metadata().pi -->
+                    <select class="select" id="cad-sel-pi"></select>
+                  </div>
+                  <div class="field col-3">
+                    <label>Item</label>
+                    <input class="input mono" id="cad-input-item" placeholder="ex.: 001" />
+                  </div>
+
+                  <div class="field col-7">
+                    <label>Projeto <span class="req" data-req-conditional="distribuicao" style="display:none;">*</span></label>
+                    <div class="input-row">
+                      <input class="input" id="cad-input-projeto" placeholder="Nome do projeto (não pode iniciar com 'Obra')" />
+                      <button class="btn" id="cad-btn-escolher" type="button" title="Escolher pasta de arquivos da obra"><i data-lucide="folder-search"></i> Escolher</button>
+                      <button class="btn" id="cad-btn-templates" type="button" title="Templates de descricao"><i data-lucide="bookmark"></i> Templates</button>
+                    </div>
+                    <span class="helper">Não pode iniciar com "Obra".</span>
+                    <!-- Atalhos de tipos especiais (replica nova_se/novo_al/reconfiguracao/alivio_se/flexibilizacao do desktop). Pre-enchem o campo Projeto com prefixo + setam regras (ex.: novo_al tambem coloca Novo Bay=SIM). -->
+                    <div class="row" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+                      <button class="btn sm" id="cad-btn-nova-se" data-act="nome-projeto:nova-se" type="button" title="Preenche Projeto com 'Nova_SE_'"><i data-lucide="building-2"></i> Nova SE</button>
+                      <button class="btn sm" id="cad-btn-novo-al" data-act="nome-projeto:novo-al" type="button" title="Preenche Projeto com 'AL_Novo_' e Novo Bay=SIM"><i data-lucide="git-branch"></i> Novo AL</button>
+                      <button class="btn sm" id="cad-btn-reconf" data-act="nome-projeto:reconf" type="button" title="Preenche Projeto com 'Reconfiguração_'"><i data-lucide="shuffle"></i> Reconfiguração</button>
+                      <button class="btn sm" id="cad-btn-alivio" data-act="nome-projeto:alivio" type="button" title="Preenche Projeto com 'Alívio_SE_'"><i data-lucide="trending-down"></i> Alívio SE</button>
+                      <button class="btn sm" id="cad-btn-flex" data-act="nome-projeto:flex" type="button" title="Preenche Projeto com 'Flexibilização_AL_'"><i data-lucide="move-3d"></i> Flexibilização</button>
+                      <button class="btn sm" id="cad-btn-multi-pi" data-act="nome-projeto:multi-pi" type="button" title="Selecionar multiplos PIs para esta obra"><i data-lucide="list-checks"></i> Multi-PI</button>
+                    </div>
+                  </div>
+                  <div class="field col-5" id="cad-row-nome-combo" title="Atalho: ao escolher um nome aqui, preenche o campo 'Projeto' acima (ex.: 'Melhorias AL' -> 'Melhorias_AL_').">
+                    <label>Atalho de Nome do Projeto</label>
+                    <select class="select" id="cad-sel-nome-projeto-combo"><option value="">— selecione —</option></select>
+                    <span class="helper">Sugestões da planilha de apoio + opções comuns.</span>
+                  </div>
+
+                  <div class="field col-12">
+                    <label>Observações</label>
+                    <textarea class="textarea" id="cad-input-observacoes" placeholder="Notas técnicas, justificativas, anexos relacionados..."></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mt-3">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="zap"></i> Informações Técnicas</div>
+              </div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="field col-3">
+                    <label>Alimentador Obra</label>
+                    <!-- Input livre + datalist: usuario pode DIGITAR um alim novo (que ainda nao existe no apoio) e tambem escolher dos sugeridos. -->
+                    <input class="input" type="text" id="cad-sel-alim-principal" list="cad-datalist-alim-principal" autocomplete="off" placeholder="Digite ou escolha um alimentador (ex.: ATB-204)"/>
+                    <datalist id="cad-datalist-alim-principal"></datalist>
+                  </div>
+                  <div class="field col-2">
+                    <label>Tensão Obra</label>
+                    <div class="input-group"><input class="input with-suffix mono" id="cad-input-tensao" maxlength="5" placeholder="13.8"/><span class="suffix">kV</span></div>
+                  </div>
+                  <div class="field col-2">
+                    <label>Tensão Operação</label>
+                    <div class="input-group"><input class="input with-suffix mono" id="cad-input-tensao-oper" maxlength="5" placeholder="13.8"/><span class="suffix">kV</span></div>
+                  </div>
+                  <div class="field col-2">
+                    <label>Regional</label>
+                    <input class="input" id="cad-input-regional" maxlength="15" placeholder="Auto-fill via apoio" />
+                  </div>
+                  <div class="field col-3">
+                    <label>Superintendência</label>
+                    <input class="input" id="cad-input-superintendencia" maxlength="12" placeholder="Auto-fill via apoio" />
+                  </div>
+
+                  <div class="field col-3">
+                    <label>SE</label>
+                    <input class="input mono" id="cad-input-se" placeholder="Auto-fill via apoio.dados_alimentador" />
+                  </div>
+                  <div class="field col-3">
+                    <label>Coordenadas De</label>
+                    <input class="input mono" id="cad-input-coord-inicio" placeholder="UTM easting;northing (ex.: 284513;9087342)" />
+                  </div>
+                  <div class="field col-3">
+                    <label>Coordenadas Para <span class="req">*</span></label>
+                    <input class="input mono" id="cad-input-coord-fim" placeholder="UTM easting;northing" />
+                  </div>
+                  <div class="field col-2">
+                    <label>Quantidade <span class="req">*</span> <i data-lucide="info"></i></label>
+                    <div class="input-group"><input class="input with-suffix mono" id="cad-input-quantidade" placeholder="0.0"/><span class="suffix">km</span></div>
+                  </div>
+                  <div class="field col-1">
+                    <label>Manobra <span class="req">*</span></label>
+                    <select class="select" id="cad-sel-manobra"><option>NÃO</option><option>SIM</option></select>
+                  </div>
+
+                  <div class="field col-5">
+                    <label>Características <span class="req">*</span></label>
+                    <select class="select" id="cad-sel-caracteristicas"></select>
+                  </div>
+                  <div class="field col-2">
+                    <label>Novo Bay?</label>
+                    <select class="select" id="cad-sel-novo-bay"><option>NÃO</option><option>SIM</option></select>
+                  </div>
+                  <div class="field col-2">
+                    <label>Criticidade</label>
+                    <select class="select" id="cad-sel-criticidade"><option>Baixa</option><option>Média</option><option>Alta</option></select>
+                  </div>
+                  <div class="field col-3">
+                    <label>Pacote <span class="req">*</span></label>
+                    <select class="select" id="cad-sel-pacote"></select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mt-3">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="banknote"></i> Dados Financeiros</div>
+              </div>
+              <div class="card-body">
+                <!-- Linha 1: Obra Aprovada + COD_PEP -->
+                <div class="form-grid">
+                  <div class="field col-4">
+                    <label>Obra Aprovada</label>
+                    <div class="pill-row" id="cad-grp-aprovada">
+                      <button class="pill active" id="cad-pill-aprovada-nao" type="button">NÃO</button>
+                      <button class="pill" id="cad-pill-aprovada-sim" type="button">SIM</button>
+                    </div>
+                  </div>
+                  <div class="field col-8">
+                    <label>COD_PEP gerado</label>
+                    <input class="input mono" id="cad-input-cod-pep"
+                           placeholder="Sigla-Ano-PI-Item (gerado automaticamente)" disabled/>
+                  </div>
+                </div>
+                <!-- Linha 2: Valor da Obra (com prefixo R$) + botão Calcular -->
+                <div class="form-grid" style="margin-top:8px;">
+                  <div class="field col-12">
+                    <label>Valor da Obra</label>
+                    <div style="display:flex;align-items:stretch;gap:6px;">
+                      <div style="display:flex;align-items:center;flex:1;
+                                  border:1px solid var(--border);
+                                  border-radius:6px;background:var(--surface);
+                                  overflow:hidden;">
+                        <span style="padding:0 10px;color:var(--text-soft);
+                                     background:var(--surface-2);
+                                     border-right:1px solid var(--border);
+                                     align-self:stretch;display:flex;
+                                     align-items:center;">R$</span>
+                        <input class="input mono" id="cad-input-valor"
+                               style="border:none;flex:1;background:transparent;"
+                               placeholder="0,00"/>
+                      </div>
+                      <button class="btn" id="cad-btn-calcular-valor"
+                              type="button" style="white-space:nowrap;">
+                        <i data-lucide="calculator"></i> Calcular
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <!-- M003: textarea oculto para motivo de alteracao critica (revelado por JS quando save_obra retornar requires_motivo). -->
+                <div class="form-grid" id="cad-row-motivo" style="display:none; margin-top:8px;">
+                  <div class="field col-12">
+                    <label>Motivo de alteração crítica <span class="helper" style="font-weight:normal;">(somente quando obra DESPACHADA)</span></label>
+                    <textarea class="textarea" id="cad-input-motivo" placeholder="Ex.: alteração solicitada por planejamento devido a revisão do estudo X"></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mt-3">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="git-branch"></i> Alimentadores e Subestações Beneficiadas</div>
+                <span class="grow"></span>
+                <span class="card-sub" id="cad-card-sub-benef"></span>
+              </div>
+              <div class="card-body">
+                <div class="form-grid">
+                  <div class="field col-7">
+                    <label>Alimentador Beneficiado</label>
+                    <div class="input-row">
+                      <input class="input" type="text" id="cad-input-alim-benef" list="cad-datalist-alim-benef" autocomplete="off" placeholder="Digite ou escolha um alimentador (ex.: ATB-205)"/>
+                      <datalist id="cad-datalist-alim-benef"></datalist>
+                      <button class="btn primary" id="cad-btn-add-benef" type="button" title="Adicionar à lista de beneficiados"><i data-lucide="plus"></i> Adicionar</button>
+                    </div>
+                    <div class="chip-list mt-2" id="cad-list-alim-benef"></div>
+                  </div>
+                  <div class="field col-5">
+                    <label>Subestações Consideradas</label>
+                    <div class="chip-list" id="cad-list-subestacoes"></div>
+                    <span class="helper">Atualizado automaticamente a partir dos alimentadores.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row mt-3" style="justify-content:flex-end; padding-bottom: 12px;">
+              <button class="btn" id="cad-btn-limpar" type="button" title="Limpar todos os campos do formulario"><i data-lucide="eraser"></i> Limpar campos</button>
+              <button class="btn primary" id="cad-btn-salvar" type="button" title="Salvar obra (Ctrl+B)"><i data-lucide="save"></i> Salvar Obra <kbd style="opacity:.7;font-size:10px;margin-left:6px;">Ctrl+B</kbd></button>
+            </div>
+          </div>
+
+          <!-- Side panel -->
+          <aside style="position: sticky; top: 4px;">
+            <div class="card" id="cad-aside-validacao">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="check-circle-2"></i> Validação</div>
+              </div>
+              <div class="card-body" style="padding: 8px;">
+                <div style="display:flex;flex-direction:column;gap:2px;" id="cad-validacao-list">
+                  <!-- M004: cada check tem data-check estavel + classe pending|ok|warn|err setada por JS. -->
+                  <div class="row" data-check="obrigatorios" data-state="pending" style="padding:6px 8px;font-size:12px;"><i data-lucide="circle" style="color:var(--text-soft);width:14px;height:14px;"></i> Campos obrigatórios preenchidos</div>
+                  <div class="row" data-check="alimentadores-sem-underscore" data-state="pending" style="padding:6px 8px;font-size:12px;"><i data-lucide="circle" style="color:var(--text-soft);width:14px;height:14px;"></i> Alimentadores sem underscore</div>
+                  <div class="row" data-check="projeto-prefix-obra" data-state="pending" style="padding:6px 8px;font-size:12px;"><i data-lucide="circle" style="color:var(--text-soft);width:14px;height:14px;"></i> Projeto não inicia com "Obra"</div>
+                  <div class="row" data-check="cod-completo" data-state="pending" style="padding:6px 8px;font-size:12px;"><i data-lucide="circle" style="color:var(--text-soft);width:14px;height:14px;"></i> COD completo (Sigla+Ano+PI+Item)</div>
+                  <div class="row" data-check="alim-encontrado-apoio" data-state="pending" style="padding:6px 8px;font-size:12px;"><i data-lucide="circle" style="color:var(--text-soft);width:14px;height:14px;"></i> Alimentador encontrado no apoio</div>
+                  <div class="row" data-check="motivo-correcao" data-state="pending" style="padding:6px 8px;font-size:12px;display:none;"><i data-lucide="circle" style="color:var(--text-soft);width:14px;height:14px;"></i> Informe motivo de alteração crítica</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mt-3" id="cad-aside-modif" style="display:none;">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="history"></i> Última modificação</div>
+              </div>
+              <div class="card-body">
+                <div style="font-size:12px;color:var(--text-muted);">por <strong id="cad-modif-autor" style="color:var(--text);">—</strong> em <span class="mono" id="cad-modif-data">—</span></div>
+                <div id="cad-modif-desc" style="margin-top:8px;font-size:11.5px;color:var(--text-soft);"></div>
+              </div>
+            </div>
+
+            <div class="card mt-3">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="keyboard"></i> Atalhos</div>
+              </div>
+              <div class="card-body">
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+                  <div class="row"><kbd class="mono">Ctrl+B</kbd><span style="color:var(--text-muted)">Salvar obra</span></div>
+                  <div class="row"><kbd class="mono">Ctrl+L</kbd><span style="color:var(--text-muted)">Foco no busca global</span></div>
+                  <div class="row"><kbd class="mono">Esc</kbd><span style="color:var(--text-muted)">Limpar campo focado</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Status da Nota: informativo (sem bloqueio).
+                 Visível só quando há despacho_status preenchido na obra
+                 carregada. Avisa o operador que está editando obra
+                 já despachada / em correção. -->
+            <div class="card mt-3" id="cad-aside-nota" style="display:none;">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="bell"></i> Status da Nota</div>
+              </div>
+              <div class="card-body" style="padding:12px;">
+                <div id="cad-nota-pill" data-status=""
+                     style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;background:var(--surface-2);color:var(--text);">
+                  <i data-lucide="circle" id="cad-nota-icon" style="width:14px;height:14px;"></i>
+                  <span id="cad-nota-status-text">—</span>
+                </div>
+                <div id="cad-nota-ref-row" style="margin-top:10px;font-size:12px;color:var(--text-muted);display:none;">
+                  <div style="font-weight:600;color:var(--text-soft);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;">Nota / Referência</div>
+                  <div class="mono" id="cad-nota-ref" style="margin-top:2px;color:var(--text);word-break:break-word;line-height:1.3;">—</div>
+                </div>
+                <div id="cad-nota-em-row" style="margin-top:8px;font-size:12px;color:var(--text-muted);display:none;">
+                  <div style="font-weight:600;color:var(--text-soft);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;">Despachada em</div>
+                  <div class="mono" id="cad-nota-em" style="margin-top:2px;color:var(--text);">—</div>
+                </div>
+                <div id="cad-nota-aviso" style="margin-top:10px;padding:8px 10px;background:oklch(0.96 0.05 80);border-left:3px solid oklch(0.72 0.20 55);border-radius:4px;font-size:11.5px;color:oklch(0.35 0.13 80);line-height:1.4;display:none;">
+                  ⚠ Você está alterando uma obra <strong>já despachada</strong>. As alterações serão registradas no histórico.
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ===== TAB: GANHOS ===== -->
+      <section class="tab-panel" id="tab-ganhos">
+        <div class="row mt-2" style="margin-bottom:14px;">
+          <div class="card grow" id="ganhos-card-pasta">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="folder-open"></i> Pasta de arquivos do alimentador</div>
+              <span class="grow"></span>
+              <span class="badge" id="ganhos-badge-arquivos"><span class="dot"></span>—</span>
+            </div>
+            <div class="card-body" style="padding: 12px 16px;">
+              <div class="input-row">
+                <input class="input mono" id="ganhos-input-pasta" placeholder="Selecione a pasta dos arquivos técnicos (FlowMT.TXT, Topologia.TXT, ...)" />
+                <button class="btn" id="ganhos-btn-selecionar" type="button" title="Selecionar pasta dos arquivos tecnicos (FlowMT.TXT, Topologia.TXT, Confiabilidade.TXT)"><i data-lucide="folder-search"></i> Selecionar</button>
+                <button class="btn" id="ganhos-btn-recarregar" type="button" title="Recontar arquivos da pasta"><i data-lucide="refresh-ccw"></i> Recarregar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="ganhos-card-parametros">
+          <div class="card-header">
+            <div class="card-title" id="ganhos-card-parametros-title"><i data-lucide="trending-up"></i> Parâmetros de Ganhos — <span id="ganhos-alim-atual">—</span></div>
+            <span class="grow"></span>
+            <button class="btn sm" id="ganhos-btn-limpar" type="button" style="display:none;" title="Limpa os 25 campos de ganhos (antes/depois/atual/beneficiadas)"><i data-lucide="eraser"></i> Limpar Ganhos</button>
+            <button class="btn sm" id="btn-ganhos-antes" type="button" title="Calcula tensoes/carregamento/perdas/contas/CHI/CI 'antes' a partir dos arquivos tecnicos da pasta selecionada"><i data-lucide="arrow-up-from-line"></i> Inserir Ganhos Antes</button>
+            <button class="btn sm" id="btn-ganhos-depois" type="button" title="Idem 'antes' mas usa contas_depois e nao soma beneficiadas"><i data-lucide="arrow-up-from-line"></i> Inserir Ganhos Depois</button>
+            <button class="btn sm primary" id="btn-ganhos-massa" type="button" title="Aplica ganhos calculados em todas as obras selecionadas em Visualizar"><i data-lucide="layers"></i> Ganhos em Massa</button>
+          </div>
+          <div class="card-body" style="padding: 0;">
+            <table class="ganhos-table">
+              <thead>
+                <tr>
+                  <th>Parâmetro</th>
+                  <th class="col-antes">Antes</th>
+                  <th class="col-depois">Depois</th>
+                  <th class="col-delta">Δ</th>
+                  <th class="col-criterio">Critério</th>
+                </tr>
+              </thead>
+              <tbody id="ganhos-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="row mt-3" style="align-items:stretch; gap: 14px;">
+          <div class="card grow">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="activity"></i> Ganhos Atuais (registrados)</div>
+            </div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="field col-12">
+                  <label>Mín/Máx Tensão Registrada Atual</label>
+                  <input class="input mono" id="ganhos-atual-tensao-reg" placeholder="0.0/0.0" />
+                </div>
+                <div class="field col-12">
+                  <label>Carregamento Registrado Atual</label>
+                  <input class="input mono" id="ganhos-atual-carreg" placeholder="0.0" />
+                </div>
+                <div class="field col-12">
+                  <label>Ganhos Totais (Atual)</label>
+                  <input class="input mono" id="ganhos-atual-totais" placeholder="alim_carrg_atual_X;..." />
+                </div>
+              </div>
+              <button class="btn mt-2" id="btn-ganhos-atual" type="button" title="Calcula tensoes min/max e carregamento atuais (sem contexto de obra). Usa apenas FlowMT.TXT + Topologia.TXT"><i data-lucide="arrow-up-from-line"></i> Preencher parâmetros atuais</button>
+            </div>
+          </div>
+
+          <div class="card" id="ganhos-card-criterios" style="width: 380px;">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="check-circle"></i> Critérios de Planejamento</div>
+            </div>
+            <div class="card-body">
+              <!-- G005: 4 checks declarativos populados por get_criterios().regras[] via JS. -->
+              <div id="ganhos-criterios-list" style="display:flex;flex-direction:column;gap:8px;">
+                <div class="row" data-criterio="tensao_min" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                  <span>Tensão mínima</span>
+                  <span class="badge">—</span>
+                </div>
+                <div class="row" data-criterio="tensao_max" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                  <span>Tensão máxima</span>
+                  <span class="badge">—</span>
+                </div>
+                <div class="row" data-criterio="carregamento" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                  <span>Carregamento</span>
+                  <span class="badge">—</span>
+                </div>
+                <div class="row" data-criterio="clientes" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                  <span>Clientes</span>
+                  <span class="badge">—</span>
+                </div>
+              </div>
+              <!-- G005: labels Planejamento (atendeu critérios) e Postergação (suporta degradação). -->
+              <div id="ganhos-label-planejamento" data-state="pending" class="mt-3" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
+                <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
+                Aguardando dados para avaliar Planejamento
+              </div>
+              <div id="ganhos-label-posterga" data-state="pending" class="mt-2" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
+                <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
+                Aguardando dados para avaliar Postergação
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== TAB: RESUMO ===== -->
+      <section class="tab-panel" id="tab-resumo">
+        <div class="subnav">
+          <button class="subnav-tab active">Volumetria & Financeiro</button>
+          <button class="subnav-tab">Resumo Regional</button>
+          <button class="subnav-tab">Detalhamento</button>
+        </div>
+
+        <div class="kpi-row" style="margin-bottom:14px;" id="resumo-kpi-row">
+          <div class="kpi" data-kpi="capex"><div class="kpi-label">CAPEX</div><div class="kpi-value">— <span class="kpi-unit">M R$</span></div></div>
+          <div class="kpi" data-kpi="obras"><div class="kpi-label">Obras planejadas</div><div class="kpi-value">—</div></div>
+          <div class="kpi" data-kpi="km"><div class="kpi-label">Km de rede</div><div class="kpi-value">— <span class="kpi-unit">km</span></div></div>
+          <div class="kpi" data-kpi="contas"><div class="kpi-label">Contas beneficiadas</div><div class="kpi-value">—</div></div>
+          <div class="kpi" data-kpi="posterga"><div class="kpi-label">Postergações</div><div class="kpi-value">—</div></div>
+        </div>
+
+        <div class="vol-grid">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="bar-chart-3"></i> Volumetria por Regional</div>
+              <span class="grow"></span>
+            </div>
+            <div class="card-body">
+              <div class="bar-chart" id="bar-chart"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="pie-chart"></i> Pacotes</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:10px;" id="pacotes-list">
+                <div style="color:var(--text-soft);font-size:12px;">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-header">
+            <div class="card-title"><i data-lucide="grid-3x3"></i> Quadro de Volumetria & Financeiro</div>
+            <span class="grow"></span>
+            <span class="card-sub" id="vol-card-sub"></span>
+          </div>
+          <div class="table-scroll" style="max-height: 360px;">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Regional</th>
+                  <th class="num">Obras</th>
+                  <th class="num">Km rede</th>
+                  <th class="num">Tensão Média (pu)</th>
+                  <th class="num">CHI</th>
+                  <th class="num">CI</th>
+                  <th class="num">Carregamento (%)</th>
+                  <th class="num">Contas benef.</th>
+                  <th class="num">Valor (R$)</th>
+                </tr>
+              </thead>
+              <tbody id="vol-tbody"></tbody>
+              <tfoot id="vol-tfoot">
+                <tr style="background:var(--surface-2);font-weight:600;">
+                  <td>Total</td>
+                  <td class="num" data-tot="obras">—</td>
+                  <td class="num" data-tot="km">—</td>
+                  <td class="num" data-tot="tensao">—</td>
+                  <td class="num" data-tot="chi">—</td>
+                  <td class="num" data-tot="ci">—</td>
+                  <td class="num" data-tot="carreg">—</td>
+                  <td class="num" data-tot="contas">—</td>
+                  <td class="num" data-tot="valor">—</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== TAB: CONFIG ===== -->
+      <section class="tab-panel" id="tab-config">
+        <div class="subnav">
+          <button class="subnav-tab active">Geral</button>
+          <button class="subnav-tab">Critérios de Planejamento</button>
+          <button class="subnav-tab">Templates de descrição</button>
+          <button class="subnav-tab">PI_BASE</button>
+          <button class="subnav-tab">Regional Map</button>
+        </div>
+
+        <div class="form-grid">
+          <div class="card col-7" style="grid-column: span 7;">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="building-2"></i> Empresa</div>
+            </div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="field col-3"><label>Sigla</label><input class="input mono" placeholder="MA, PA, PI, AL, RS, AP, GO"/></div>
+                <div class="field col-9"><label>Razão social</label><input class="input" placeholder="Razão social da empresa"/></div>
+                <div class="field col-12"><label>Caminho do banco padrão</label><input class="input mono" placeholder="Caminho do .db (ex.: \\servidor\pasta\obras.db)"/></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card col-5" style="grid-column: span 5;">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="sliders"></i> Preferências de UI</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div class="row" style="justify-content:space-between;">
+                  <div><div style="font-weight:500;">Rodapé compacto</div><div class="helper">Reduz altura da barra de status.</div></div>
+                  <div class="switch on" data-toggle></div>
+                </div>
+                <div class="row" style="justify-content:space-between;">
+                  <div><div style="font-weight:500;">Legenda crítica destacada</div><div class="helper">Cor vermelha em obras que falharam critérios.</div></div>
+                  <div class="switch on" data-toggle></div>
+                </div>
+                <div class="row" style="justify-content:space-between;">
+                  <div><div style="font-weight:500;">Auto-recarregar Apoio</div><div class="helper">Detecta alterações no arquivo de apoio.</div></div>
+                  <div class="switch" data-toggle></div>
+                </div>
+                <div class="row" style="justify-content:space-between;">
+                  <div><div style="font-weight:500;">Confirmar exclusões excepcionais</div></div>
+                  <div class="switch on" data-toggle></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card col-12" style="grid-column: span 12;">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="check-circle"></i> Critérios de Planejamento (vigentes)</div>
+              <span class="grow"></span>
+              <button class="btn sm"><i data-lucide="rotate-ccw"></i> Restaurar padrões</button>
+            </div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="field col-3"><label>Tensão Mín. (pu)</label><input class="input mono" value="0.93"/></div>
+                <div class="field col-3"><label>Tensão Máx. (pu)</label><input class="input mono" value="1.05"/></div>
+                <div class="field col-3"><label>Carregamento Máx. (%)</label><input class="input mono" value="80"/></div>
+                <div class="field col-3"><label>CHI Mínimo</label><input class="input mono" value="1.0"/></div>
+                <div class="field col-3"><label>CI Mínimo</label><input class="input mono" value="0.85"/></div>
+                <div class="field col-3"><label>Piora Mercado (%)</label><input class="input mono" value="3.0"/></div>
+                <div class="field col-3"><label>Anos de horizonte</label><input class="input mono" value="5"/></div>
+                <div class="field col-3"><label>Postergação máx. (anos)</label><input class="input mono" value="2"/></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card col-12" style="grid-column: span 12;">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="map"></i> Mapa Regional</div>
+              <span class="grow"></span>
+              <button class="btn sm"><i data-lucide="plus"></i> Adicionar regional</button>
+            </div>
+            <div class="table-scroll" style="max-height: 240px;">
+              <table class="data">
+                <thead><tr><th>Regional</th><th>Superintendência</th><th>SE prefixo</th><th>Cor</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td colspan="5" style="padding:18px;text-align:center;color:var(--text-soft);">Carregando…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ============ Templates de descricao ============ -->
+          <div class="card col-12" id="tpl-card" style="grid-column: span 12; display:none;">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="bookmark"></i> Templates de descrição</div>
+              <span class="grow"></span>
+              <button class="btn sm" id="tpl-btn-add-pi" type="button" title="Adicionar PI_BASE"><i data-lucide="plus"></i> + PI_BASE</button>
+            </div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="field col-4">
+                  <label>PI Base</label>
+                  <select class="input mono" id="tpl-sel-pi"></select>
+                </div>
+                <div class="field col-8" style="align-self:end;">
+                  <span class="helper">
+                    Edite o template do PI selecionado. Use <span class="mono">{nome_coluna}</span> para inserir valores. Clique num campo da lista lateral para inserir no cursor.
+                  </span>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:3fr 1fr;gap:12px;margin-top:8px;">
+                <div>
+                  <label class="helper" style="display:block;margin-bottom:4px;">Template</label>
+                  <textarea class="input mono" id="tpl-textarea" rows="10" style="width:100%;resize:vertical;font-size:12.5px;line-height:1.4;" placeholder="Digite o template. Use {nome_coluna} para inserir valores."></textarea>
+                </div>
+                <div>
+                  <label class="helper" style="display:block;margin-bottom:4px;">Campos disponíveis</label>
+                  <div id="tpl-fields" class="mono" style="border:1px solid var(--border);border-radius:6px;height:236px;overflow:auto;font-size:11.5px;background:var(--surface-2);">
+                    <div style="padding:12px;color:var(--text-soft);">Carregando…</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:12px;gap:8px;">
+                <button class="btn" id="tpl-btn-preview" type="button"><i data-lucide="eye"></i> Pré-visualizar</button>
+                <span class="grow"></span>
+                <button class="btn" id="tpl-btn-restore-pi" type="button" title="Restaura o template padrão deste PI"><i data-lucide="rotate-ccw"></i> Restaurar padrão do PI</button>
+                <button class="btn" id="tpl-btn-restore-all" type="button" title="Remove TODOS os templates personalizados"><i data-lucide="trash-2"></i> Restaurar todos</button>
+                <button class="btn primary" id="tpl-btn-save" type="button"><i data-lucide="save"></i> Salvar</button>
+              </div>
+
+              <div style="margin-top:12px;">
+                <label class="helper" style="display:block;margin-bottom:4px;">Pré-visualização</label>
+                <textarea class="input mono" id="tpl-preview" rows="4" readonly style="width:100%;resize:vertical;font-size:12px;background:var(--surface-2);" placeholder="Pré-visualização do template renderizado com a primeira obra do PI."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ PI Extra (modulos auxiliares por PI_BASE) ============ -->
+          <div class="card col-12" id="config-card-pi-extra" style="grid-column: span 12;">
+            <div class="card-header">
+              <div class="card-title"><i data-lucide="plus-circle"></i> PI Extra (módulos auxiliares por PI_BASE)</div>
+              <span class="grow"></span>
+              <span class="helper" id="config-pi-extra-help" style="margin-right:10px;">
+                Configure quais chaves extras (módulo de aterramento, etc.) são somadas ao cálculo de valor por PI_BASE.
+              </span>
+              <button class="btn sm" id="config-pi-extra-reload" type="button" title="Recarregar do config.json"><i data-lucide="refresh-ccw"></i> Recarregar</button>
+            </div>
+            <div class="table-scroll" style="max-height: 320px;">
+              <table class="data">
+                <thead><tr><th style="width:120px;">PI_BASE</th><th>PI (nome longo)</th><th>Chaves Extras</th><th style="width:100px;">Ação</th></tr></thead>
+                <tbody id="config-pi-extra-tbody">
+                  <tr><td colspan="4" style="padding:18px;text-align:center;color:var(--text-soft);">Carregando…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ============ STATUS BAR ============ -->
+  <footer class="status" id="status-bar">
+    <span class="item" id="status-conn"><span class="pulse"></span>—</span>
+    <span class="sep"></span>
+    <span class="item mono" id="status-db"><i data-lucide="database"></i>—</span>
+    <span class="sep"></span>
+    <span class="item mono" id="status-apoio"><i data-lucide="folder"></i>—</span>
+    <span class="sep"></span>
+    <span class="item" id="status-user"><i data-lucide="user"></i>—</span>
+    <span class="grow" style="flex:1;"></span>
+    <!-- Indicador permanente de modo de edicao (status bar) - 2 variantes
+         via data-modo="banco" (verde) / "cenario" (laranja). -->
+    <span class="item" id="status-cenario" data-modo="banco" style="background:oklch(0.55 0.13 155);color:white;padding:4px 12px;border-radius:4px;font-weight:700;letter-spacing:.02em;box-shadow:0 1px 2px rgba(0,0,0,.15);">
+      <i data-lucide="database" id="status-cenario-icon" style="width:12px;height:12px;"></i>
+      <span style="text-transform:uppercase;font-size:10px;opacity:.92;" id="status-cenario-label">Banco:</span>
+      <span class="mono" id="status-cenario-nome">principal</span>
+    </span>
+    <span class="sep" id="status-cenario-sep"></span>
+    <span class="item" id="status-modif"></span>
+    <span class="sep"></span>
+    <span class="item" id="status-selection"></span>
+    <span class="sep"></span>
+    <span class="item" id="status-version"></span>
+  </footer>
+</div>
+
+<!-- ============ MODAL FILTROS ============ -->
+<div class="modal-backdrop" id="modal-filtros" style="display:none;">
+  <div class="modal lg">
+    <div class="modal-header">
+      <div class="modal-title">Filtros avançados</div>
+      <button class="btn ghost btn-icon" data-close><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field col-4"><label>COD <span class="helper">(; múltiplos)</span></label><input class="input"/></div>
+        <div class="field col-4"><label>Ano</label><input class="input"/></div>
+        <div class="field col-4"><label>PI</label><input class="input"/></div>
+        <div class="field col-6"><label>Projeto</label><input class="input"/></div>
+        <div class="field col-6"><label>Alimentador</label><input class="input"/></div>
+        <div class="field col-6"><label>Alimentadores Beneficiados</label><input class="input"/></div>
+        <div class="field col-3"><label>Regional</label><select class="select"><option>Todas</option></select></div>
+        <div class="field col-3"><label>Superintendência</label><select class="select"><option>Todas</option></select></div>
+        <div class="field col-4"><label>Subestação</label><input class="input"/></div>
+        <div class="field col-4"><label>Pacote</label><select class="select"><option>Todos</option></select></div>
+        <div class="field col-4"><label>Técnico Atualizado</label><select class="select"><option>—</option><option>SIM</option><option>NÃO</option></select></div>
+        <div class="field col-12">
+          <label>Critérios</label>
+          <div class="pill-row">
+            <button class="pill active">Todas</button>
+            <button class="pill">Atenderam</button>
+            <button class="pill">Falharam</button>
+            <button class="pill">Aprovadas</button>
+            <button class="pill">Não aprovadas</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-close>Cancelar</button>
+      <button class="btn ghost">Limpar filtros</button>
+      <button class="btn primary" data-close><i data-lucide="filter"></i>Aplicar filtros</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL PI_BASE (M007) ============ -->
+<div class="modal-backdrop" id="modal-pi" style="display:none;">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Gerenciar PI_BASE</div>
+      <button class="btn ghost btn-icon" data-close id="pi-btn-close-x"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="row" style="margin-bottom:10px;">
+        <input class="input grow" id="pi-input-novo" placeholder="Adicionar novo PI_BASE..."/>
+        <button class="btn primary" id="pi-btn-add" type="button"><i data-lucide="plus"></i>Adicionar</button>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-soft);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">PIs configurados</div>
+        <ul id="pi-list" style="display:flex;flex-direction:column;list-style:none;margin:0;padding:0;">
+          <!-- preenchido por JS via get_pi_base_map(); estrutura por linha:
+               <li class="row" data-pi-name="..."><span class="mono grow">SIGLA · NOME</span>
+                 <button class="btn ghost sm" data-pi-act="rename"><i data-lucide="pencil"></i></button>
+                 <button class="btn ghost sm" data-pi-act="remove"><i data-lucide="trash-2"></i></button>
+               </li>
+          -->
+        </ul>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="pi-btn-restore" type="button"><i data-lucide="rotate-ccw"></i>Restaurar padrões</button>
+      <button class="btn" id="pi-btn-rename" type="button" disabled title="Renomeia o PI_BASE selecionado"><i data-lucide="pencil"></i>Renomear</button>
+      <button class="btn" id="pi-btn-remove" type="button" disabled title="Remove o PI_BASE selecionado"><i data-lucide="trash-2"></i>Remover</button>
+      <span class="grow"></span>
+      <button class="btn primary" data-close id="pi-btn-close">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL "GERAR DESCRIÇÃO?" (M005) ============ -->
+<div class="modal-backdrop" id="modal-gerar-descricao" style="display:none;">
+  <div class="modal sm">
+    <div class="modal-header">
+      <div class="modal-title">Descrição da Obra</div>
+      <button class="btn ghost btn-icon" data-close><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Nenhuma descrição foi informada. Deseja gerar a descrição automaticamente?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="gerar-desc-btn-cancelar" type="button">Cancelar</button>
+      <span class="grow"></span>
+      <button class="btn" id="gerar-desc-btn-nao" type="button">Não</button>
+      <button class="btn primary" id="gerar-desc-btn-sim" type="button">Sim, gerar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL "CÓDIGO ALTERADO" (M006) ============ -->
+<div class="modal-backdrop" id="modal-cod-alterado" style="display:none;">
+  <div class="modal sm">
+    <div class="modal-header">
+      <div class="modal-title">Código alterado</div>
+      <button class="btn ghost btn-icon" data-close><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>O código da obra mudou em relação à versão original. Deseja criar uma nova obra ou atualizar a obra existente?</p>
+      <p style="color:var(--text-soft);font-size:12px;margin-top:8px;">COD original: <span id="cod-alterado-antigo" class="mono">—</span> · COD novo: <span id="cod-alterado-novo" class="mono">—</span></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="cod-alt-btn-cancelar" type="button">Cancelar</button>
+      <span class="grow"></span>
+      <button class="btn" id="cod-alt-btn-atualizar" type="button">Atualizar existente</button>
+      <button class="btn primary" id="cod-alt-btn-criar" type="button">Criar nova</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL MULTI-PI (M008) ============ -->
+<div class="modal-backdrop" id="modal-multi-pi" style="display:none;">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Selecionar PIs</div>
+      <button class="btn ghost btn-icon" data-close><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-soft);font-size:12px;margin:0 0 10px 0;">Marque um ou mais Projetos de Investimento. Cada PI sem mapeamento de PI_BASE conhecido abrirá um prompt ao confirmar.</p>
+      <div id="multi-pi-list" style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:8px;">
+        <!-- preenchido por JS: <label><input type="checkbox" value="DISTRIBUIÇÃO"/> DISTRIBUIÇÃO</label> -->
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-close>Cancelar</button>
+      <span class="grow"></span>
+      <button class="btn primary" id="multi-pi-btn-ok" type="button"><i data-lucide="check"></i>OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL BUSCAR PROJETO (M009) ============ -->
+<div class="modal-backdrop" id="modal-projeto-busca" style="display:none;">
+  <div class="modal lg">
+    <div class="modal-header">
+      <div class="modal-title">Escolher Projeto</div>
+      <button class="btn ghost btn-icon" data-close><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="row" style="margin-bottom:8px;">
+        <input class="input grow" id="projeto-busca-filtro" placeholder="Filtrar por nome..."/>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;max-height:400px;overflow-y:auto;">
+        <table class="data-table" style="width:100%;font-size:12px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px 10px;">Nome do Projeto</th>
+              <th style="text-align:left;padding:6px 10px;">Pacote</th>
+              <th style="text-align:right;padding:6px 10px;">Obras</th>
+            </tr>
+          </thead>
+          <tbody id="projeto-busca-tbody">
+            <!-- preenchido por JS via list_projetos() / projeto_fetch_obras() -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-close>Cancelar</button>
+      <span class="grow"></span>
+      <button class="btn primary" id="projeto-busca-btn-ok" type="button" disabled><i data-lucide="check"></i>Carregar projeto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL GANHOS EM MASSA (G006) ============ -->
+<div class="modal-backdrop" id="modal-ganhos-massa" style="display:none;">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Ganhos em Massa</div>
+      <button class="btn ghost btn-icon" data-close type="button" title="Cancelar"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted);font-size:12px;margin:0 0 10px 0;">
+        Para cada obra selecionada na aba Visualizar, calcula os ganhos a partir dos arquivos técnicos
+        da pasta configurada e persiste nas colunas correspondentes. Marque uma ou mais opções.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--border);border-radius:6px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="ganhos-massa-chk-antes" />
+          <span>Inserir Ganhos <strong>Antes</strong></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="ganhos-massa-chk-depois" />
+          <span>Inserir Ganhos <strong>Depois</strong></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="ganhos-massa-chk-atual" />
+          <span>Preencher Parâmetros <strong>Atuais</strong></span>
+        </label>
+      </div>
+      <div class="mt-2" style="font-size:12px;color:var(--text-soft);">
+        Obras selecionadas: <span id="ganhos-massa-cods-count" class="mono">0</span>
+        — <span id="ganhos-massa-cods-preview" class="mono"></span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" data-close type="button">Cancelar</button>
+      <span class="grow"></span>
+      <button class="btn" id="ganhos-massa-btn-help" type="button" title="Ajuda"><i data-lucide="help-circle"></i></button>
+      <button class="btn primary" id="ganhos-massa-btn-ok" type="button" disabled title="Selecione obras e ao menos uma opção"><i data-lucide="check"></i> Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL DE PROGRESSO (Bloco 5 / Auditoria #44) ============ -->
+<div class="modal-backdrop" id="coplan-progress-modal" style="display:none;">
+  <div class="modal sm">
+    <div class="modal-header">
+      <div class="modal-title" id="coplan-progress-title">Operação em andamento</div>
+    </div>
+    <div class="modal-body">
+      <div id="coplan-progress-label" style="font-size:13px;color:var(--text);margin-bottom:10px;">Iniciando…</div>
+      <div style="background:var(--surface-2);border-radius:6px;height:14px;overflow:hidden;border:1px solid var(--border);">
+        <div id="coplan-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width .15s ease-out;"></div>
+      </div>
+      <div class="row" style="justify-content:space-between;margin-top:8px;font-size:11.5px;color:var(--text-soft);">
+        <span class="mono" id="coplan-progress-counter">0 / 0</span>
+        <span class="mono" id="coplan-progress-elapsed">0s</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn danger" id="coplan-progress-cancel" type="button"><i data-lucide="x"></i> Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ============ UX wiring (mock data removed - tudo populado via main_web.py bridges)
+
+  // ====== Navigation ======
+  function setActiveTab(name) {
+    document.querySelectorAll('.sb-item[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${name}`));
+    const titles = { visualizar: ["Visualizar Obras","Operação"], cadastro: ["Cadastro de Obras","Operação"], ganhos: ["Ganhos","Operação"], resumo: ["Resumo / Volumetria","Operação"], config: ["Configurações","Sistema"] };
+    if (titles[name]) {
+      document.getElementById('page-title').textContent = titles[name][0];
+      document.getElementById('bc-path').textContent = titles[name][0];
+      document.querySelector('.h-breadcrumb').firstChild.textContent = titles[name][1] + ' · ';
+    }
+    window.scrollTo(0, 0);
+    document.querySelector('.main').scrollTo(0, 0);
+  }
+  document.querySelectorAll('.sb-item[data-tab]').forEach(b => b.addEventListener('click', () => setActiveTab(b.dataset.tab)));
+
+  // ====== Sidebar collapse ======
+  document.getElementById('toggle-sidebar').addEventListener('click', () => {
+    document.getElementById('app').classList.toggle('collapsed');
+  });
+
+  // ====== Modal control ======
+  function openModal(id) { document.getElementById(id).style.display = 'grid'; }
+  function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+  document.getElementById('btn-modal-filtros').addEventListener('click', () => openModal('modal-filtros'));
+  document.getElementById('btn-modal-pi').addEventListener('click', () => openModal('modal-pi'));
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', e => {
+    e.target.closest('.modal-backdrop').style.display = 'none';
+  }));
+  document.querySelectorAll('.modal-backdrop').forEach(b => b.addEventListener('click', e => {
+    if (e.target === b) b.style.display = 'none';
+  }));
+
+  // ====== Toggles ======
+  document.querySelectorAll('[data-toggle]').forEach(t => t.addEventListener('click', () => t.classList.toggle('on')));
+
+  // ====== Pills ======
+  document.querySelectorAll('.pill-row').forEach(row => {
+    row.addEventListener('click', e => {
+      if (!e.target.classList.contains('pill')) return;
+      row.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+      e.target.classList.add('active');
+    });
+  });
+
+  // ====== Subnav tabs (within Resumo / Config) ======
+  document.querySelectorAll('.subnav').forEach(nav => {
+    nav.querySelectorAll('.subnav-tab').forEach(t => t.addEventListener('click', () => {
+      nav.querySelectorAll('.subnav-tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    }));
+  });
+
+  // ====== Row select ======
+  document.addEventListener('click', e => {
+    const row = e.target.closest('#obras-tbody tr');
+    if (row) {
+      row.classList.toggle('selected');
+      const cb = row.querySelector('input[type=checkbox]');
+      if (cb && e.target.tagName !== 'INPUT') cb.checked = row.classList.contains('selected');
+    }
+  });
+
+  // ====== Save toast ======
+  document.getElementById('btn-salvar-global').addEventListener('click', () => {
+    const t = document.getElementById('toast');
+    t.innerHTML = '<i data-lucide="check-circle-2" style="width:14px;height:14px;color:var(--success);"></i> Alterações salvas com sucesso';
+    t.classList.add('show');
+    if (window.lucide) lucide.createIcons();
+    setTimeout(() => t.classList.remove('show'), 1800);
+  });
+
+  // ====== Init ======
+  // Sem render mockado — main_web.py bridges populam tudo via coplan:tab events.
+  if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>
