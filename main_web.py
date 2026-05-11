@@ -21923,8 +21923,8 @@ COPLAN_BRIDGE_JS = """
       btnConn.__pivoted = true;
       btnConn.addEventListener('click', function () {
         if (!api) return;
-        var msg = 'Conectar Banco:\n\n'
-          + '  OK = SELECIONAR banco existente (.db)\n'
+        var msg = 'Conectar Banco:\\n\\n'
+          + '  OK = SELECIONAR banco existente (.db)\\n'
           + '  Cancelar = CRIAR novo banco';
         var existente = window.confirm(msg);
 
