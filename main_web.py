@@ -1553,6 +1553,9 @@ class CoplanApi:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "path": "", "count": 0, "error": f"fetch: {exc}"}
 
+        # Cenario ativo: restringe + aplica overrides (paridade get_obras)
+        raw_rows = self._apply_cenario_to_rows(db, raw_rows, cols)
+
         try:
             from openpyxl import Workbook  # type: ignore[import-not-found]
             from openpyxl.styles import Font, PatternFill  # type: ignore[import-not-found]
@@ -1608,6 +1611,7 @@ class CoplanApi:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "path": "", "count": 0,
                     "error": f"fetch: {exc}"}
+        raw_rows = self._apply_cenario_to_rows(db, raw_rows, cols)
         if not raw_rows:
             return {"ok": False, "path": "", "count": 0,
                     "error": "sem obras para resumir"}
@@ -1671,6 +1675,8 @@ class CoplanApi:
             cols = list(db.get_column_names() or [])
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "path": "", "count": 0, "error": f"fetch: {exc}"}
+        # Cenario ativo: restringe + overrides ANTES do filtro de cods
+        raw_rows = self._apply_cenario_to_rows(db, raw_rows, cols)
         # Filtra por cods se fornecido (#5)
         if isinstance(cods, (list, tuple)) and cods:
             cod_set = {str(c).strip() for c in cods if str(c or "").strip()}
@@ -1808,6 +1814,7 @@ class CoplanApi:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "path": "", "count_projetos": 0,
                     "count_alimentadores": 0, "error": f"fetch: {exc}"}
+        raw_rows = self._apply_cenario_to_rows(db, raw_rows, cols)
         if not raw_rows:
             return {"ok": False, "path": "", "count_projetos": 0,
                     "count_alimentadores": 0,
@@ -1922,6 +1929,8 @@ class CoplanApi:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "path": "", "count": 0,
                     "error": f"fetch: {exc}"}
+
+        rows = self._apply_cenario_to_rows(db, rows, cols)
 
         cfg = self._config or {}
         resultados: list[dict[str, Any]] = []
@@ -8799,6 +8808,40 @@ class CoplanApi:
             except ValueError:
                 continue
         return new_row
+
+    def _apply_cenario_to_rows(
+        self, db: Any, raw_rows: list[Any], cols: list[str],
+    ) -> list[Any]:
+        """Aplica cenario ativo a um conjunto de rows ja fetched:
+        restringe aos CODs do cenario e aplica overrides. Idempotente:
+        sem cenario ativo devolve raw_rows inalterado. Usado pelos
+        export_* para garantir paridade com get_obras."""
+        cen_nome = self._cenario_active_name()
+        if not cen_nome:
+            return list(raw_rows)
+        try:
+            cod_set, cen_info = self._cenario_cod_set(db, cen_nome)
+            ovmap = self._cenario_overrides_map(db, cen_nome)
+        except Exception:  # noqa: BLE001
+            return list(raw_rows)
+        if not cod_set:
+            # cenario com 0 obras (ou tabelas inexistentes)
+            return []
+        try:
+            idx_cod = cols.index("cod")
+        except ValueError:
+            return list(raw_rows)
+        filtered: list[Any] = []
+        for r in raw_rows:
+            cod_r = str(r[idx_cod] if idx_cod < len(r) else "").strip()
+            if cod_r not in cod_set:
+                continue
+            filtered.append(self._cenario_apply_to_row(
+                r, cols, cod_r,
+                cen_info.get(cod_r) or {},
+                ovmap.get(cod_r) or {},
+            ))
+        return filtered
 
     # -------- Bridges publicas --------
 
