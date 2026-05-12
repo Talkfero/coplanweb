@@ -12189,6 +12189,14 @@ COPLAN_BRIDGE_JS = """
   function bindToolbar() {
     var bar = document.querySelector('#tab-visualizar .table-toolbar');
     if (!bar) return false;
+    // Idempotente: bindToolbar e' chamado em coplan:tab + coplan:obras +
+    // boot. Sem este guard, cada rebind empilhava um novo listener no
+    // mesmo botao -> clicar em "Atualizar" mostrava N confirms em fila,
+    // e ao confirmar todos disparava N chamadas de
+    // atualizar_obras_valores_async (a 1a iniciava, as demais batiam no
+    // guard "ja ha uma operacao em andamento").
+    if (bar.__coplanToolbarBound) return true;
+    bar.__coplanToolbarBound = true;
     var api = window.pywebview && window.pywebview.api;
 
     // Atualizar: replica legado (atualizar_obra_mixin.py:34-36).
