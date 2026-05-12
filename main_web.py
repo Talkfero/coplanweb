@@ -1477,10 +1477,17 @@ class CoplanApi:
             novo = f"{atual}\n{nota}" if atual else nota
             db.update_obra({coluna_log: novo}, cod_s, skip_blank=True)
         except Exception as exc:  # noqa: BLE001
-            print(f"[main_web] register_exclusao falhou cod={cod_s}: {exc}",
+            friendly = self._friendly_busy_error(exc)
+            err_s = friendly or f"update: {exc}"
+            print(f"[main_web] register_exclusao falhou cod={cod_s}: {err_s}",
                   file=sys.stderr)
-            return {"ok": False, "error": f"update: {exc}",
-                    "logged_to_db": False, "nota": nota}
+            out: dict[str, Any] = {
+                "ok": False, "error": err_s,
+                "logged_to_db": False, "nota": nota,
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
         print(f"[main_web] AUDIT: {nota} cod={cod_s}", file=sys.stderr)
         return {"ok": True, "logged_to_db": True, "nota": nota,
                 "coluna": coluna_log}
@@ -1750,6 +1757,7 @@ class CoplanApi:
         despacho_ref = f"CORRECAO: {motivo_s}"
         falhas: list[str] = []
         marcadas = 0
+        busy_msg = ""
         for c in cods:
             cod_s = str(c or "").strip()
             if not cod_s:
@@ -1762,10 +1770,16 @@ class CoplanApi:
                 }, cod_s, skip_blank=True)
                 marcadas += 1
             except Exception as exc:  # noqa: BLE001
+                friendly = self._friendly_busy_error(exc)
+                if friendly:
+                    busy_msg = friendly
+                    falhas.append(f"{cod_s}: {friendly}")
+                    break
                 falhas.append(f"{cod_s}: {exc}")
         return {
-            "ok": (marcadas > 0 or not falhas),
-            "error": "",
+            "ok": (marcadas > 0 and not busy_msg),
+            "error": busy_msg,
+            "blocked": "db_busy" if busy_msg else "",
             "marcadas": marcadas,
             "falhas": falhas,
             "motivo": motivo_s,
@@ -4890,7 +4904,14 @@ class CoplanApi:
         try:
             db.update_obra(cols_to_update, cod_s, skip_blank=True)
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "error": str(exc), "cod": cod_s, "applied": 0}
+            friendly = self._friendly_busy_error(exc)
+            out: dict[str, Any] = {
+                "ok": False, "error": friendly or str(exc),
+                "cod": cod_s, "applied": 0,
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
         return {
             "ok": True, "error": "", "cod": cod_s,
             "slot": str(slot), "applied": len(cols_to_update),
@@ -6891,7 +6912,14 @@ class CoplanApi:
             label_s = str(label or "").strip() or None
             path = db.backup_database(label=label_s)
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "path": "", "error": f"backup: {exc}"}
+            friendly = self._friendly_busy_error(exc)
+            out: dict[str, Any] = {
+                "ok": False, "path": "",
+                "error": friendly or f"backup: {exc}",
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
         if not path:
             return {"ok": False, "path": "", "error": "backup nao criado"}
         return {"ok": True, "path": str(path), "error": ""}
@@ -6904,7 +6932,14 @@ class CoplanApi:
         try:
             path = db.weekly_backup()
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "path": "", "error": f"weekly_backup: {exc}"}
+            friendly = self._friendly_busy_error(exc)
+            out: dict[str, Any] = {
+                "ok": False, "path": "",
+                "error": friendly or f"weekly_backup: {exc}",
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
         if not path:
             return {"ok": False, "path": "", "error": "weekly backup nao criado"}
         return {"ok": True, "path": str(path), "error": ""}
@@ -6918,7 +6953,13 @@ class CoplanApi:
         try:
             db.normalize_decimal_in_db()
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "error": f"normalize: {exc}"}
+            friendly = self._friendly_busy_error(exc)
+            out: dict[str, Any] = {
+                "ok": False, "error": friendly or f"normalize: {exc}",
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
         return {"ok": True, "error": ""}
 
     # ------------------------------------------------------------------
@@ -7552,8 +7593,14 @@ class CoplanApi:
         try:
             preenchidos = int(db.preencher_cod_pep_pendentes() or 0)
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "preenchidos": 0,
-                    "error": f"preencher_pendentes: {exc}"}
+            friendly = self._friendly_busy_error(exc)
+            out: dict[str, Any] = {
+                "ok": False, "preenchidos": 0,
+                "error": friendly or f"preencher_pendentes: {exc}",
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
         return {"ok": True, "preenchidos": preenchidos, "error": ""}
 
     # --- Fase 3: CalculationManager (calculos finos) ------------------
@@ -8290,8 +8337,15 @@ class CoplanApi:
             # chave aqui, mas mantemos o flag).
             db.update_obra({col: ganhos_str}, cod_s, skip_blank=True)
         except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "error": f"update_obra: {exc}",
-                    "computed": r}
+            friendly = self._friendly_busy_error(exc)
+            out: dict[str, Any] = {
+                "ok": False,
+                "error": friendly or f"update_obra: {exc}",
+                "computed": r,
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
         return {
             "ok": True,
             "cod": cod_s,
