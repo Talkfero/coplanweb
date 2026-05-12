@@ -11953,7 +11953,7 @@ COPLAN_BRIDGE_JS = """
 (function () {
   // ---- Section 6 / Passo 3.6 (Visualizar / toolbar de ações) ----
   // Conecta os botoes da .table-toolbar:
-  //   Atualizar      -> coplanLoadObras (JS-only)
+  //   Atualizar      -> API.atualizar_obras_valores(cods) (exige selecao)
   //   Detalhamento   -> API.export_detalhamento(cods_selecionados)
   //   Relat. Crit.   -> API.export_relatorio_criterios()
   //   Nota Colapso   -> API.export_nota_colapso(cods)  (stub)
@@ -12070,22 +12070,19 @@ COPLAN_BRIDGE_JS = """
     if (!bar) return false;
     var api = window.pywebview && window.pywebview.api;
 
-    // Atualizar -- Fase A2.
-    // Se ha COD selecionados: confirma e chama atualizar_obras_valores
-    // (bulk recalculo de valor_obra via processar_atualizacao do core).
-    // Caso contrario: comportamento legado (refresh JS-only da tabela).
+    // Atualizar: replica legado (atualizar_obra_mixin.py:34-36).
+    // Exige selecao; com COD selecionados, recalcula valor_obra via
+    // atualizar_obras_valores -> processar_atualizacao (qtd x modulo +
+    // modulos_extras configurados por PI).
     var btnRefresh = findToolbarBtn('Atualizar');
     if (btnRefresh) {
       btnRefresh.addEventListener('click', function () {
         var cods = getSelectedCods();
         if (cods.length === 0) {
-          toast('Atualizando obras...', 'info');
-          if (typeof window.coplanLoadObras === 'function') {
-            window.coplanLoadObras().then(function () {
-              toast('Obras atualizadas', 'info');
-            });
-          }
-          return;
+          return toast(
+            'Selecione pelo menos uma obra visivel para atualizar.',
+            'warn'
+          );
         }
         if (!api || !api.atualizar_obras_valores) {
           return toast('API indisponivel', 'error');
