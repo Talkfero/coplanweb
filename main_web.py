@@ -39,7 +39,7 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 HERE = Path(__file__).resolve().parent
 HTML_FILE = HERE / "Coplan UI.html"
@@ -3142,6 +3142,61 @@ class CoplanApi:
     # chaves_inexistentes -- mesmo formato do legado MainWindow.atualizar_obras.
     # ------------------------------------------------------------------
     def atualizar_obras_valores(self, cods: Any = None) -> dict[str, Any]:
+        return self._run_atualizar_obras_valores(cods, progress_cb=None)
+
+    # ------------------------------------------------------------------
+    # atualizar_obras_valores_async (Bloco 5): versao com worker thread +
+    # progress modal. JS dispara, recebe op_id, abre coplanProgress e polla
+    # progress_state ate finished=True. Usado para bulk (toolbar + context
+    # menu multi-cods). Per-row "Atualizar Valor" usa o sync acima (1 obra,
+    # rapido).
+    # ------------------------------------------------------------------
+    def atualizar_obras_valores_async(
+        self, cods: Any = None,
+    ) -> dict[str, Any]:
+        with _OP_LOCK:
+            if not _OP_STATE.get("finished"):
+                return {
+                    "ok": False, "started": False,
+                    "error": ("ja ha uma operacao em andamento: "
+                              + str(_OP_STATE.get("label") or "")),
+                }
+        # Conta cods up-front (label da barra). Validacoes reais (cenario,
+        # db, planilha apoio) ficam dentro do _run_*; se falharem, terminamos
+        # a operacao imediatamente com ok=False.
+        cods_list: list[str] = []
+        if isinstance(cods, (list, tuple)):
+            cods_list = [str(c).strip() for c in cods if str(c or "").strip()]
+        n = len(cods_list) if cods_list else 0
+        label = (f"Recalculando {n} obra(s)..." if n
+                 else "Recalculando todas as obras...")
+        op_id = _op_reset(label)
+
+        def _worker():
+            try:
+                def _cb(processed: int, total: int, sub_label: str) -> bool:
+                    _op_set_progress(processed, total, sub_label)
+                    return _op_check_cancel()
+                result = self._run_atualizar_obras_valores(
+                    cods, progress_cb=_cb,
+                )
+                _op_finish(result=result, error="")
+            except Exception as exc:  # noqa: BLE001
+                _op_finish(result=None, error=f"worker: {exc}")
+
+        t = threading.Thread(
+            target=_worker, daemon=True,
+            name=f"coplan-atualizar-{op_id}",
+        )
+        t.start()
+        return {"ok": True, "started": True, "op_id": op_id, "error": ""}
+
+    def _run_atualizar_obras_valores(
+        self,
+        cods: Any = None,
+        *,
+        progress_cb: Callable[[int, int, str], bool] | None = None,
+    ) -> dict[str, Any]:
         cen_nome = self._cenario_active_name()
         if cen_nome:
             return {
@@ -3170,7 +3225,7 @@ class CoplanApi:
 
         try:
             from core.services.atualizar_obra_service import (  # type: ignore[import-not-found]
-                extrair_obra_input, processar_atualizacao,
+                _resolver_extra_keys, calcular_valor_obra, extrair_obra_input,
             )
             # Fase A11: usa obter_modulos_extras direto do core.
             from core.services.pi_metadata_service import (  # type: ignore[import-not-found]
@@ -3184,6 +3239,15 @@ class CoplanApi:
                     "processadas_ok": 0, "falhas_total": 0,
                     "atualizadas": 0, "falhas": [],
                     "chaves_inexistentes": [], "total": 0}
+
+        def _emit(processed: int, total: int, label: str) -> bool:
+            """Reporta progresso e devolve True se o user pediu cancel."""
+            if progress_cb is None:
+                return False
+            try:
+                return bool(progress_cb(processed, total, label))
+            except Exception:  # noqa: BLE001
+                return False
 
         # Carrega config 1x para o pi_extra_module_keys_fn.
         try:
@@ -3233,65 +3297,122 @@ class CoplanApi:
             except Exception:  # noqa: BLE001
                 return []
 
-        try:
-            res = processar_atualizacao(
-                inputs, df,
-                col_chave=col_chave,
-                col_valor=col_valor,
-                regional_map=REGIONAL_MAP,
-                extra_key_map={},
-                pi_extra_module_keys_fn=_pi_extras,
-            )
-        except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "error": f"processar_atualizacao: {exc}",
-                    "processadas_ok": 0, "falhas_total": 0,
-                    "atualizadas": 0, "falhas": [],
-                    "chaves_inexistentes": [], "total": len(inputs)}
+        # Fase 1 (calculo): loop equivalente a processar_atualizacao, mas
+        # com hooks de progresso/cancel por obra. Reproduz a mesma
+        # contabilidade (falhas_max=5, set de chaves_inexistentes).
+        total_calc = len(inputs)
+        results: list[Any] = []
+        processadas_ok = 0
+        falhas_total = 0
+        falhas: list[str] = []
+        chaves_inex: set[str] = set()
+        cancelled = False
+        if _emit(0, max(total_calc, 1),
+                 f"Calculando valor de {total_calc} obra(s)..."):
+            cancelled = True
+        if not cancelled:
+            for i, inp in enumerate(inputs, 1):
+                try:
+                    extras = _resolver_extra_keys(
+                        inp.pi_base,
+                        extra_key_map={},
+                        pi_extra_module_keys_fn=_pi_extras,
+                    )
+                    result = calcular_valor_obra(
+                        inp, df,
+                        col_chave=col_chave,
+                        col_valor=col_valor,
+                        regional_map=REGIONAL_MAP,
+                        extra_keys_for_pi=extras,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[main_web] calcular_valor_obra cod={inp.cod}: "
+                          f"{exc}", file=sys.stderr)
+                    falhas_total += 1
+                    if len(falhas) < 5:
+                        falhas.append(f"COD={inp.cod or 'N/D'}: {exc}")
+                    continue
+                results.append(result)
+                if result.sucesso_base:
+                    processadas_ok += 1
+                for motivo in result.motivos_falha:
+                    falhas_total += 1
+                    if len(falhas) < 5:
+                        falhas.append(
+                            f"COD={result.cod or 'N/D'}: {motivo}")
+                for ch in result.chaves_inexistentes:
+                    chaves_inex.add(ch)
+                if (i % 10) == 0 or i == total_calc:
+                    if _emit(
+                        i, total_calc,
+                        f"Calculando valor... ({i}/{total_calc})",
+                    ):
+                        cancelled = True
+                        break
 
-        # Aplica os UPDATE (a UI do desktop faz isso no agregador). Nao
-        # tenta "gerar_descricao_obra" -- isso fica para um botao especifico
-        # (depende de QInputDialog para "atualizar_descricao" Y/N).
+        # Fase 2 (escrita): UPDATE no banco para cada result valido. A
+        # descricao_obra fica fora -- depende de dialog Y/N do legado.
+        to_write = [
+            r for r in results
+            if r.sucesso_base and r.valor_obra_formatado and str(r.cod or "").strip()
+        ]
+        total_write = len(to_write)
         atualizadas = 0
         update_falhas: list[str] = []
         busy_msg = ""
-        for r_obra in res.results:
-            if not r_obra.sucesso_base or not r_obra.valor_obra_formatado:
-                continue
-            cod_s = str(r_obra.cod or "").strip()
-            if not cod_s:
-                continue
-            try:
-                db.update_obra(
-                    {"valor_obra": r_obra.valor_obra_formatado},
-                    cod_s, skip_blank=True,
-                )
-                atualizadas += 1
-            except Exception as exc:  # noqa: BLE001
-                friendly = self._friendly_busy_error(exc)
-                if friendly:
-                    # Banco ocupado: aborta o loop (outros usuarios
-                    # estao escrevendo). Mensagem amigavel pro JS.
-                    busy_msg = friendly
-                    update_falhas.append(f"COD={cod_s}: {friendly}")
-                    print(f"[main_web] db busy em atualizar_obras_valores: "
-                          f"{friendly}", file=sys.stderr)
-                    break
-                msg = f"COD={cod_s}: update_obra: {exc}"
-                update_falhas.append(msg)
-                print(f"[main_web] {msg}", file=sys.stderr)
+        if not cancelled and total_write > 0:
+            if _emit(0, total_write,
+                     f"Salvando {total_write} obra(s) no banco..."):
+                cancelled = True
+        if not cancelled:
+            for i, r_obra in enumerate(to_write, 1):
+                cod_s = str(r_obra.cod or "").strip()
+                try:
+                    db.update_obra(
+                        {"valor_obra": r_obra.valor_obra_formatado},
+                        cod_s, skip_blank=True,
+                    )
+                    atualizadas += 1
+                except Exception as exc:  # noqa: BLE001
+                    friendly = self._friendly_busy_error(exc)
+                    if friendly:
+                        # Banco ocupado: aborta o loop (outros usuarios
+                        # estao escrevendo). Mensagem amigavel pro JS.
+                        busy_msg = friendly
+                        update_falhas.append(f"COD={cod_s}: {friendly}")
+                        print(
+                            f"[main_web] db busy em "
+                            f"atualizar_obras_valores: {friendly}",
+                            file=sys.stderr,
+                        )
+                        break
+                    msg = f"COD={cod_s}: update_obra: {exc}"
+                    update_falhas.append(msg)
+                    print(f"[main_web] {msg}", file=sys.stderr)
+                if (i % 5) == 0 or i == total_write:
+                    if _emit(
+                        i, total_write,
+                        f"Salvando... ({i}/{total_write})",
+                    ):
+                        cancelled = True
+                        break
 
-        falhas_full = list(res.falhas) + update_falhas
+        falhas_full = list(falhas) + update_falhas
+        ok_flag = not busy_msg and not cancelled
+        err_str = busy_msg or ("cancelado" if cancelled else "")
         out: dict[str, Any] = {
-            "ok": not busy_msg, "error": busy_msg,
+            "ok": ok_flag, "error": err_str,
             "total": len(inputs),
-            "processadas_ok": res.processadas_ok,
+            "processadas_ok": processadas_ok,
             "atualizadas": atualizadas,
-            "falhas_total": res.falhas_total + len(update_falhas),
+            "falhas_total": falhas_total + len(update_falhas),
             "falhas": falhas_full,
-            "chaves_inexistentes": sorted(res.chaves_inexistentes),
+            "chaves_inexistentes": sorted(chaves_inex),
         }
         if busy_msg:
             out["blocked"] = "db_busy"
+        if cancelled:
+            out["cancelled"] = True
         return out
 
     def get_alimentador_details(self, alim: Any) -> dict[str, Any]:
@@ -12096,21 +12217,7 @@ COPLAN_BRIDGE_JS = """
                 + ' obra(s) selecionada(s)? Os valores sao buscados na'
                 + ' planilha de apoio (aba MODULO) e gravados no banco.';
         if (!window.confirm(msg)) return;
-        toast('Recalculando ' + cods.length + ' obra(s)...', 'info');
-        api.atualizar_obras_valores(cods).then(function (r) {
-          if (!r) return toast('Falha desconhecida', 'error');
-          if (!r.ok) return toast('Falhou: ' + (r.error || '?'), 'error');
-          var falhas = r.falhas_total || 0;
-          var inex = (r.chaves_inexistentes || []).length;
-          var lvl = (falhas > 0 || inex > 0) ? 'warn' : 'info';
-          var partes = [(r.atualizadas || 0) + ' atualizada(s)'];
-          if (falhas > 0) partes.push(falhas + ' falha(s)');
-          if (inex > 0)  partes.push(inex   + ' chave(s) inexistente(s)');
-          toast(partes.join(' / '), lvl);
-          if (typeof window.coplanLoadObras === 'function') {
-            window.coplanLoadObras();
-          }
-        });
+        window.coplanAtualizarBulk(cods);
       });
     }
 
@@ -13978,16 +14085,7 @@ COPLAN_BRIDGE_JS = """
         action: function () {
           if (!api.atualizar_obras_valores) return toast('API indisponivel', 'error');
           if (!window.confirm('Recalcular valor_obra de ' + cods.length + ' obra(s)?')) return;
-          toast('Recalculando...', 'info');
-          api.atualizar_obras_valores(cods).then(function (r) {
-            if (r && r.ok) {
-              toast(r.atualizadas + ' atualizada(s) / ' + (r.falhas_total||0) + ' falha(s)',
-                    (r.falhas_total||0) > 0 ? 'warn' : 'info');
-              if (window.coplanLoadObras) window.coplanLoadObras();
-            } else {
-              toast('Falha: ' + (r && r.error || '?'), 'error');
-            }
-          });
+          window.coplanAtualizarBulk(cods);
         },
       });
       items.push({
@@ -26863,6 +26961,112 @@ COPLAN_BRIDGE_JS = """
       P.onComplete = onComplete || null;
       startPolling();
     }
+  };
+})();
+
+// ============================================================
+// coplanAtualizarBulk: rota bulk de "Atualizar Valor" pelo backend
+// async (worker thread + coplanProgress). Usado pelo botao toolbar
+// e pelo context menu multi-cods. Fallback para o sync se o async
+// nao estiver disponivel (versao antiga do backend).
+// ============================================================
+(function () {
+  if (window.coplanAtualizarBulk) return;
+
+  function toast(msg, type) {
+    if (typeof window.coplanToast === 'function') {
+      return window.coplanToast(msg, type);
+    }
+    var t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.className = 'toast ' + (type || 'info') + ' show';
+    setTimeout(function () { t.className = 'toast'; }, 2400);
+  }
+
+  function summarize(r) {
+    if (!r) return 'Falha desconhecida';
+    var falhas = r.falhas_total || 0;
+    var inex = (r.chaves_inexistentes || []).length;
+    var partes = [(r.atualizadas || 0) + ' atualizada(s)'];
+    if (falhas > 0) partes.push(falhas + ' falha(s)');
+    if (inex > 0) partes.push(inex + ' chave(s) inexistente(s)');
+    return partes.join(' / ');
+  }
+
+  function level(r) {
+    if (!r || !r.ok) return 'error';
+    var falhas = r.falhas_total || 0;
+    var inex = (r.chaves_inexistentes || []).length;
+    return (falhas > 0 || inex > 0) ? 'warn' : 'info';
+  }
+
+  window.coplanAtualizarBulk = function (cods) {
+    var api = window.pywebview && window.pywebview.api;
+    if (!api || !api.atualizar_obras_valores) {
+      toast('API indisponivel', 'error');
+      return;
+    }
+    var n = (cods && cods.length) || 0;
+    var label = 'Recalculando ' + n + ' obra(s)...';
+
+    var hasAsync = !!(api.atualizar_obras_valores_async
+                      && window.coplanProgress
+                      && window.coplanProgress.start);
+
+    if (!hasAsync) {
+      // Fallback sync: aviso porque pode travar com muitas obras.
+      toast(label, 'info');
+      api.atualizar_obras_valores(cods).then(function (r) {
+        if (r && r.cancelled) return toast('Cancelado', 'warn');
+        if (!r || !r.ok) {
+          return toast('Falhou: ' + (r && r.error || '?'), 'error');
+        }
+        toast(summarize(r), level(r));
+        if (typeof window.coplanLoadObras === 'function') {
+          window.coplanLoadObras();
+        }
+      });
+      return;
+    }
+
+    // Async: abre progress modal e dispara worker; polling cuida do resto.
+    window.coplanProgress.start(label, function (result, errStr, cancelled) {
+      if (cancelled || (result && result.cancelled)) {
+        toast(
+          'Cancelado'
+            + (result ? ' (' + (result.atualizadas || 0)
+                + ' ja atualizada(s))' : ''),
+          'warn'
+        );
+        if (typeof window.coplanLoadObras === 'function') {
+          window.coplanLoadObras();
+        }
+        return;
+      }
+      if (errStr) return toast('Falhou: ' + errStr, 'error');
+      if (!result || !result.ok) {
+        return toast(
+          'Falhou: ' + ((result && result.error) || '?'), 'error');
+      }
+      toast(summarize(result), level(result));
+      if (typeof window.coplanLoadObras === 'function') {
+        window.coplanLoadObras();
+      }
+    });
+    api.atualizar_obras_valores_async(cods).then(function (r) {
+      if (r && r.ok && r.started) return; // polling assume o controle
+      // Falha ao iniciar: fecha modal e mostra erro
+      if (window.coplanProgress && window.coplanProgress.close) {
+        window.coplanProgress.close();
+      }
+      toast('Falha ao iniciar: ' + ((r && r.error) || '?'), 'error');
+    }).catch(function (e) {
+      if (window.coplanProgress && window.coplanProgress.close) {
+        window.coplanProgress.close();
+      }
+      toast('Erro: ' + (e && e.message || e), 'error');
+    });
   };
 })();
 
