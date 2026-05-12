@@ -217,6 +217,96 @@ class CoplanApi:
             print(f"[main_web] data_state.update_source falhou: {exc}",
                   file=sys.stderr)
 
+    # ------------------------------------------------------------------
+    # Paridade desktop: mensagem amigavel quando o banco esta ocupado
+    # por outro usuario / processo. Substitui str(exc) cru por uma
+    # mensagem com user/maquina/desde lida do .lock ao lado do .db.
+    # ------------------------------------------------------------------
+    def _friendly_busy_error(self, exc: Exception) -> str | None:
+        """Se ``exc`` for busy/locked, devolve build_database_busy_message.
+        Caso contrario, devolve None (chamador propaga str(exc)).
+        """
+        try:
+            from runtime.database import (  # noqa: PLC0415
+                DatabaseBusyError, DatabaseLockedError,
+                build_database_busy_message, get_lock_info_path,
+                is_sqlite_busy_error, read_lock_info,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        is_busy = isinstance(exc, (DatabaseBusyError, DatabaseLockedError))
+        if not is_busy:
+            try:
+                import sqlite3 as _sq  # noqa: PLC0415
+                if isinstance(exc, _sq.OperationalError) and \
+                        is_sqlite_busy_error(exc):
+                    is_busy = True
+            except Exception:  # noqa: BLE001
+                pass
+        if not is_busy:
+            return None
+        lock_info: dict[str, Any] | None = None
+        try:
+            db_path = ""
+            if self._db_manager is not None:
+                db_path = str(
+                    getattr(self._db_manager, "db_path", "") or "")
+            if db_path:
+                lock_info = read_lock_info(get_lock_info_path(db_path))
+        except Exception:  # noqa: BLE001
+            lock_info = None
+        try:
+            return build_database_busy_message(lock_info)
+        except Exception:  # noqa: BLE001
+            return None
+
+    # ------------------------------------------------------------------
+    # Paridade desktop validar_campos_obrigatorios
+    # (ui/main_window/cadastro_mixin.py:580):
+    # campos obrigatorios no save de uma obra. JS ja valida no form,
+    # mas duplicamos no backend como defense-in-depth (payload pode
+    # vir incompleto se o front bypassar a validacao).
+    # ------------------------------------------------------------------
+    _CAMPOS_OBRIGATORIOS_SAVE = (
+        # (coluna_db, label_amigavel)
+        ("ano_",                    "Ano"),
+        ("projeto_investimento",    "Projeto de Investimentos"),
+        ("alimentador_principal",   "Alimentador Obra"),
+        ("quantidade_material",     "Quantidade"),
+        ("coordenada_fim",          "Coordenadas Para"),
+        ("tipo_pacote",             "Pacote"),
+        ("caracteristicas_material","Caracteristicas"),
+        ("manobra",                 "Manobra"),
+    )
+
+    def _validar_campos_obrigatorios(
+        self, cleaned: dict[str, Any],
+    ) -> list[str]:
+        """Retorna labels dos campos obrigatorios vazios. Vazio => OK."""
+        faltam: list[str] = []
+        for col, label in self._CAMPOS_OBRIGATORIOS_SAVE:
+            val = cleaned.get(col)
+            if val is None or str(val).strip() == "":
+                faltam.append(label)
+        # Para PI base = DISTRIBUICAO* o nome_projeto e' obrigatorio
+        # (paridade: ver cadastro_mixin.py:602-606).
+        try:
+            from runtime.text_utils import normalize_key  # noqa: PLC0415
+            from codigo5_coplan import get_pi_base  # noqa: PLC0415
+        except Exception:  # noqa: BLE001
+            normalize_key = lambda s: str(s or "").strip().upper()  # noqa: E731
+            get_pi_base = lambda pi, prompt_user=False: ""  # noqa: E731
+        pi = str(cleaned.get("projeto_investimento") or "")
+        try:
+            pi_base = get_pi_base(pi, prompt_user=False) or ""
+        except Exception:  # noqa: BLE001
+            pi_base = ""
+        distrib = {"DISTRIBUICAO", "DISTRIBUICAO LD 34,5 KV"}
+        if normalize_key(pi) in distrib or normalize_key(pi_base) in distrib:
+            if not str(cleaned.get("nome_projeto") or "").strip():
+                faltam.append("Projeto")
+        return faltam
+
     def _ensure_managers(self) -> None:
         # Cache de config invalidado por save_config_empresa / save_criterios
         # / etc. Sem este reload, todo cfg = self._config or {} cai em {}
@@ -1415,6 +1505,7 @@ class CoplanApi:
             return {"ok": False, "deleted": 0, "errors": ["lista de cods vazia"]}
         deleted = 0
         errors: list[str] = []
+        busy_msg = ""
         for cod in cods:
             cod_s = str(cod or "").strip()
             if not cod_s:
@@ -1423,8 +1514,21 @@ class CoplanApi:
                 db.delete_obra(cod_s)
                 deleted += 1
             except Exception as exc:  # noqa: BLE001
+                friendly = self._friendly_busy_error(exc)
+                if friendly:
+                    # Busy/locked: para o loop (nao adianta tentar mais
+                    # cods se o banco esta em uso por outro usuario).
+                    busy_msg = friendly
+                    errors.append(f"{cod_s}: {friendly}")
+                    break
                 errors.append(f"{cod_s}: {exc}")
-        return {"ok": not errors, "deleted": deleted, "errors": errors}
+        out: dict[str, Any] = {
+            "ok": not errors, "deleted": deleted, "errors": errors,
+        }
+        if busy_msg:
+            out["blocked"] = "db_busy"
+            out["error"] = busy_msg
+        return out
 
     def export_detalhamento(self, cods: Any = None) -> dict[str, Any]:
         """Exporta as obras selecionadas (ou todas) para XLSX em
@@ -1988,6 +2092,18 @@ class CoplanApi:
         if "tecnico_dirty" in cols:
             cleaned["tecnico_dirty"] = "NÃO"
 
+        # Paridade desktop validar_campos_obrigatorios: defense-in-depth.
+        # JS ja valida no form, mas se o payload chegar sem algum
+        # obrigatorio, abortamos antes de gastar insert/update.
+        faltam = self._validar_campos_obrigatorios(cleaned)
+        if faltam:
+            return {
+                "ok": False, "cod": cod, "mode": "",
+                "error": ("Campos obrigatorios vazios: "
+                          + ", ".join(faltam)),
+                "campos_obrigatorios_vazios": faltam,
+            }
+
         try:
             existing = db.fetch_by_cod(cod) if cod else None
         except Exception:  # noqa: BLE001
@@ -2119,6 +2235,10 @@ class CoplanApi:
         except ValueError as exc:
             return {"ok": False, "cod": cod, "mode": "", "error": f"validacao: {exc}"}
         except Exception as exc:  # noqa: BLE001
+            friendly = self._friendly_busy_error(exc)
+            if friendly:
+                return {"ok": False, "cod": cod, "mode": "",
+                        "blocked": "db_busy", "error": friendly}
             return {"ok": False, "cod": cod, "mode": "", "error": str(exc)}
 
         out: dict[str, Any] = {"ok": True, "cod": cod, "mode": mode, "error": ""}
@@ -3100,6 +3220,7 @@ class CoplanApi:
         # (depende de QInputDialog para "atualizar_descricao" Y/N).
         atualizadas = 0
         update_falhas: list[str] = []
+        busy_msg = ""
         for r_obra in res.results:
             if not r_obra.sucesso_base or not r_obra.valor_obra_formatado:
                 continue
@@ -3113,13 +3234,22 @@ class CoplanApi:
                 )
                 atualizadas += 1
             except Exception as exc:  # noqa: BLE001
+                friendly = self._friendly_busy_error(exc)
+                if friendly:
+                    # Banco ocupado: aborta o loop (outros usuarios
+                    # estao escrevendo). Mensagem amigavel pro JS.
+                    busy_msg = friendly
+                    update_falhas.append(f"COD={cod_s}: {friendly}")
+                    print(f"[main_web] db busy em atualizar_obras_valores: "
+                          f"{friendly}", file=sys.stderr)
+                    break
                 msg = f"COD={cod_s}: update_obra: {exc}"
                 update_falhas.append(msg)
                 print(f"[main_web] {msg}", file=sys.stderr)
 
         falhas_full = list(res.falhas) + update_falhas
-        return {
-            "ok": True, "error": "",
+        out: dict[str, Any] = {
+            "ok": not busy_msg, "error": busy_msg,
             "total": len(inputs),
             "processadas_ok": res.processadas_ok,
             "atualizadas": atualizadas,
@@ -3127,6 +3257,9 @@ class CoplanApi:
             "falhas": falhas_full,
             "chaves_inexistentes": sorted(res.chaves_inexistentes),
         }
+        if busy_msg:
+            out["blocked"] = "db_busy"
+        return out
 
     def get_alimentador_details(self, alim: Any) -> dict[str, Any]:
         """Retorna metadados de UM alimentador (TENSAO, REGIONAL,
