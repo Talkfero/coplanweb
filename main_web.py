@@ -27489,6 +27489,690 @@ COPLAN_BRIDGE_JS = """
   window.coplanTemplates = T;
 })();
 </script>
+<script>
+// ============================================================
+// coplanColFilters (2026-05-12): filtros Excel-style por coluna
+//
+// Substitui o modal "Filtros avancados" (removido) por:
+//   1. Funil clicavel em cada <th> da tabela Visualizar (so colunas
+//      visiveis). Click abre popover com:
+//        - caixa de busca
+//        - checkbox "(Selecionar todos)"
+//        - lista de valores distintos extraidos de coplanObrasRawAll
+//        - OK / Limpar
+//   2. Segmented "Criterios" (Todas / Atenderam / Falharam / Aprovadas /
+//      Nao aprovadas) injetado na .filter-bar -- substitui o pill-row
+//      que vivia dentro do modal.
+//   3. Chips de filtros ativos no #filter-chips-list (ja existia no
+//      HTML, sem JS antes).
+//
+// Pipeline:
+//   coplanLoadObras / coplanApplySearch -> setam coplanObrasRaw/etc.
+//   Wrappers desta IIFE snapshotam pra coplanObrasRawAll e aplicam
+//   o filtro de coluna (mutando coplanObrasRaw/coplanObras/...). Depois
+//   chamam coplanRenderObras -- que pagina sobre o ja filtrado.
+//   Critrios continua server-side (vai no coplanFilters.criterios).
+// ============================================================
+(function () {
+  if (window.__coplanColFiltersIIFE) return;
+  window.__coplanColFiltersIIFE = true;
+
+  // ----- estado -----
+  // colFilters: { colName: { values: Set<UPPER>, includeBlank: bool } }
+  window.coplanColumnFilters = {};
+  // criterios: '' | 'atenderam' | 'falharam' | 'aprovadas' | 'nao aprovadas'
+  window.coplanCriteriosFilter = '';
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+  function humanize(c) {
+    return String(c || '').replace(/_/g, ' ').split(' ').map(function (w) {
+      return w ? w.charAt(0).toUpperCase() + w.slice(1) : '';
+    }).join(' ');
+  }
+  function hasAnyColFilter() {
+    var cf = window.coplanColumnFilters || {};
+    for (var k in cf) {
+      if (!Object.prototype.hasOwnProperty.call(cf, k)) continue;
+      var f = cf[k];
+      if (!f) continue;
+      if ((f.values && f.values.size) || f.includeBlank) return true;
+    }
+    return false;
+  }
+  function colIdx(col) {
+    var cols = window.coplanObrasColumns || [];
+    return cols.indexOf(col);
+  }
+  function distinctFromRawAll(col) {
+    var raw = window.coplanObrasRawAll || window.coplanObrasRaw || [];
+    var idx = colIdx(col);
+    if (idx < 0 || !raw.length) return { values: [], hasBlank: false };
+    var seen = {};
+    var out = [];
+    var hasBlank = false;
+    for (var i = 0; i < raw.length; i++) {
+      var v = raw[i] ? raw[i][idx] : null;
+      var s = (v == null) ? '' : String(v).trim();
+      if (!s) { hasBlank = true; continue; }
+      var k = s.toUpperCase();
+      if (!seen[k]) { seen[k] = true; out.push(s); }
+    }
+    out.sort(function (a, b) {
+      var na = parseFloat(a), nb = parseFloat(b);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
+    });
+    return { values: out, hasBlank: hasBlank };
+  }
+
+  // ----- snapshot/apply -----
+  function snapshotAll() {
+    window.coplanObrasRawAll = (window.coplanObrasRaw || []).slice();
+    window.coplanObrasAll = (window.coplanObras || []).slice();
+    window.coplanObrasPassouAll = (window.coplanObrasPassou || []).slice();
+  }
+  function applyColumnFilters() {
+    var rawAll = window.coplanObrasRawAll || [];
+    var curAll = window.coplanObrasAll || [];
+    var passAll = window.coplanObrasPassouAll || [];
+    if (!hasAnyColFilter()) {
+      window.coplanObrasRaw = rawAll.slice();
+      window.coplanObras = curAll.slice();
+      window.coplanObrasPassou = passAll.slice();
+      renderChips();
+      return;
+    }
+    var cf = window.coplanColumnFilters;
+    var idxMap = {};
+    for (var c in cf) {
+      if (Object.prototype.hasOwnProperty.call(cf, c)) {
+        idxMap[c] = colIdx(c);
+      }
+    }
+    var rawOut = [], curOut = [], passOut = [];
+    for (var i = 0; i < rawAll.length; i++) {
+      var r = rawAll[i];
+      var keep = true;
+      for (var col in cf) {
+        var spec = cf[col];
+        if (!spec) continue;
+        var hasVals = spec.values && spec.values.size;
+        if (!hasVals && !spec.includeBlank) continue;
+        var ci = idxMap[col];
+        var v = (ci >= 0 && r) ? r[ci] : null;
+        var s = (v == null) ? '' : String(v).trim();
+        if (!s) {
+          if (!spec.includeBlank) { keep = false; break; }
+        } else {
+          var u = s.toUpperCase();
+          if (!(spec.values && spec.values.has(u))) {
+            keep = false; break;
+          }
+        }
+      }
+      if (keep) {
+        rawOut.push(r);
+        if (i < curAll.length) curOut.push(curAll[i]);
+        if (i < passAll.length) passOut.push(passAll[i]);
+      }
+    }
+    window.coplanObrasRaw = rawOut;
+    window.coplanObras = curOut;
+    window.coplanObrasPassou = passOut;
+    renderChips();
+  }
+  window.coplanApplyColumnFilters = applyColumnFilters;
+
+  function refreshTableAfterChange() {
+    applyColumnFilters();
+    if (typeof window.coplanRenderObras === 'function') {
+      try { window.coplanRenderObras(); } catch (e) {
+        console.warn('[coplan] render after filter erro:', e);
+      }
+    }
+  }
+
+  // ----- wrap load/search para snapshotar antes de aplicar filtro -----
+  function patchLoadAndSearch() {
+    if (typeof window.coplanLoadObras === 'function'
+        && !window.coplanLoadObras.__coplanColFiltersPatched) {
+      var origLoad = window.coplanLoadObras;
+      var wLoad = function () {
+        return origLoad.apply(this, arguments).then(function () {
+          snapshotAll();
+          applyColumnFilters();
+          if (typeof window.coplanRenderObras === 'function') {
+            try { window.coplanRenderObras(); } catch (e) {}
+          }
+        });
+      };
+      wLoad.__coplanColFiltersPatched = true;
+      window.coplanLoadObras = wLoad;
+    }
+    if (typeof window.coplanApplySearch === 'function'
+        && !window.coplanApplySearch.__coplanColFiltersPatched) {
+      var origApp = window.coplanApplySearch;
+      var wApp = function () {
+        return origApp.apply(this, arguments).then(function () {
+          snapshotAll();
+          applyColumnFilters();
+          if (typeof window.coplanRenderObras === 'function') {
+            try { window.coplanRenderObras(); } catch (e) {}
+          }
+        });
+      };
+      wApp.__coplanColFiltersPatched = true;
+      window.coplanApplySearch = wApp;
+    }
+  }
+
+  // ----- popover -----
+  var __pop = null;
+  function closePopover() {
+    if (__pop) {
+      try { __pop.remove(); } catch (e) {}
+      __pop = null;
+      document.removeEventListener('mousedown', onDocMouseDown, true);
+      document.removeEventListener('keydown', onPopKeydown, true);
+    }
+  }
+  function onDocMouseDown(e) {
+    if (!__pop) return;
+    if (__pop.contains(e.target)) return;
+    closePopover();
+  }
+  function onPopKeydown(e) {
+    if (e.key === 'Escape') { closePopover(); e.stopPropagation(); }
+  }
+  function openPopover(anchorEl, col) {
+    closePopover();
+    var distinct = distinctFromRawAll(col);
+    var existing = window.coplanColumnFilters[col]
+      || { values: new Set(), includeBlank: false };
+    var sel = new Set(existing.values || []);
+    var includeBlank = !!existing.includeBlank;
+    var isActive = (sel.size > 0) || includeBlank;
+
+    var pop = document.createElement('div');
+    pop.className = 'coplan-colfilter-popover';
+    pop.style.cssText = [
+      'position:absolute', 'z-index:200',
+      'background:var(--surface)', 'border:1px solid var(--border)',
+      'border-radius:8px', 'box-shadow:0 8px 24px rgba(0,0,0,.18)',
+      'min-width:240px', 'max-width:320px',
+      'padding:10px', 'font-size:12px',
+      'display:flex', 'flex-direction:column', 'gap:8px',
+    ].join(';');
+    pop.innerHTML =
+      '<div style="font-weight:600;color:var(--text);">'
+        + esc(humanize(col)) + '</div>'
+      + '<input type="text" class="input coplan-cf-search" '
+        + 'placeholder="Buscar..." style="padding:6px 8px;font-size:12px;"/>'
+      + '<label style="display:flex;align-items:center;gap:6px;'
+        + 'padding:4px 0;border-bottom:1px solid var(--border);">'
+        + '<input type="checkbox" class="coplan-cf-all"/>'
+        + '<span>(Selecionar todos)</span></label>'
+      + '<div class="coplan-cf-list" style="max-height:230px;'
+        + 'overflow-y:auto;display:flex;flex-direction:column;'
+        + 'gap:2px;padding:4px 0;"></div>'
+      + '<div style="display:flex;gap:6px;justify-content:flex-end;'
+        + 'margin-top:4px;">'
+        + '<button type="button" class="btn ghost coplan-cf-clear">'
+          + 'Limpar</button>'
+        + '<button type="button" class="btn primary coplan-cf-ok">'
+          + 'OK</button>'
+      + '</div>';
+    document.body.appendChild(pop);
+    __pop = pop;
+
+    // posicionamento: abaixo do funil
+    var rect = anchorEl.getBoundingClientRect();
+    var top = rect.bottom + window.scrollY + 4;
+    var left = rect.left + window.scrollX;
+    // mantém dentro da viewport horizontal
+    var vw = document.documentElement.clientWidth;
+    var popW = 280;
+    if (left + popW > vw - 8) left = Math.max(8, vw - popW - 8);
+    pop.style.top = top + 'px';
+    pop.style.left = left + 'px';
+
+    var listEl = pop.querySelector('.coplan-cf-list');
+    var searchEl = pop.querySelector('.coplan-cf-search');
+    var allEl = pop.querySelector('.coplan-cf-all');
+
+    function renderList(filterText) {
+      var q = String(filterText || '').trim().toUpperCase();
+      var html = '';
+      if (distinct.hasBlank) {
+        if (!q || '(VAZIOS)'.indexOf(q) >= 0) {
+          html += '<label style="display:flex;align-items:center;'
+            + 'gap:6px;padding:2px 4px;color:var(--text-soft);'
+            + 'font-style:italic;">'
+            + '<input type="checkbox" data-blank="1"'
+            + (includeBlank ? ' checked' : '') + '/>'
+            + '<span>(Vazios)</span></label>';
+        }
+      }
+      for (var i = 0; i < distinct.values.length; i++) {
+        var v = distinct.values[i];
+        var u = v.toUpperCase();
+        if (q && u.indexOf(q) < 0) continue;
+        var checked = sel.has(u) ? ' checked' : '';
+        html += '<label style="display:flex;align-items:center;'
+          + 'gap:6px;padding:2px 4px;">'
+          + '<input type="checkbox" data-val="' + esc(u) + '"'
+          + checked + '/>'
+          + '<span>' + esc(v) + '</span></label>';
+      }
+      if (!html) {
+        html = '<div style="padding:8px;color:var(--text-soft);'
+          + 'font-style:italic;">Nenhum valor.</div>';
+      }
+      listEl.innerHTML = html;
+      // sync "Selecionar todos"
+      syncAll();
+    }
+    function syncAll() {
+      var boxes = listEl.querySelectorAll('input[type="checkbox"]');
+      var total = boxes.length;
+      var checked = 0;
+      for (var i = 0; i < total; i++) {
+        if (boxes[i].checked) checked++;
+      }
+      if (!total) {
+        allEl.checked = false;
+        allEl.indeterminate = false;
+      } else if (checked === total) {
+        allEl.checked = true;
+        allEl.indeterminate = false;
+      } else if (checked === 0) {
+        allEl.checked = false;
+        allEl.indeterminate = false;
+      } else {
+        allEl.checked = false;
+        allEl.indeterminate = true;
+      }
+    }
+
+    renderList('');
+
+    searchEl.addEventListener('input', function () {
+      renderList(searchEl.value);
+    });
+    allEl.addEventListener('change', function () {
+      var want = allEl.checked;
+      var boxes = listEl.querySelectorAll('input[type="checkbox"]');
+      boxes.forEach(function (b) { b.checked = want; });
+      allEl.indeterminate = false;
+    });
+    listEl.addEventListener('change', function () { syncAll(); });
+
+    pop.querySelector('.coplan-cf-clear').addEventListener('click', function () {
+      // Remove o filtro desta coluna por completo.
+      delete window.coplanColumnFilters[col];
+      closePopover();
+      anchorEl.setAttribute('data-active', '0');
+      refreshTableAfterChange();
+    });
+    pop.querySelector('.coplan-cf-ok').addEventListener('click', function () {
+      // Le todos os checkboxes (independente do filtro de busca atual):
+      // os que ja estavam selected mas estao filtrados da lista mantem
+      // selecao. Solucao: comecar de sel atual, e ajustar com base nos
+      // boxes visiveis.
+      // Estrategia mais simples: percorrer todos os distinct.values e ver
+      // se o input correspondente esta presente; se nao estiver visivel
+      // (filtrado), mantem o estado anterior.
+      var newVals = new Set();
+      // boxes presentes no DOM agora
+      var present = {};
+      var boxes = listEl.querySelectorAll('input[type="checkbox"][data-val]');
+      boxes.forEach(function (b) {
+        present[b.getAttribute('data-val')] = b.checked;
+      });
+      for (var i = 0; i < distinct.values.length; i++) {
+        var u = distinct.values[i].toUpperCase();
+        if (Object.prototype.hasOwnProperty.call(present, u)) {
+          if (present[u]) newVals.add(u);
+        } else if (sel.has(u)) {
+          newVals.add(u);
+        }
+      }
+      var blankBox = listEl.querySelector('input[type="checkbox"][data-blank="1"]');
+      var newBlank = blankBox ? blankBox.checked : includeBlank;
+
+      var allDistinctCount = distinct.values.length
+        + (distinct.hasBlank ? 1 : 0);
+      var newSelCount = newVals.size + (newBlank ? 1 : 0);
+      if (newSelCount === 0 || newSelCount === allDistinctCount) {
+        // Sem filtro (tudo OU nada selecionado equivale a "sem filtro").
+        delete window.coplanColumnFilters[col];
+        anchorEl.setAttribute('data-active', '0');
+      } else {
+        window.coplanColumnFilters[col] = {
+          values: newVals, includeBlank: newBlank,
+        };
+        anchorEl.setAttribute('data-active', '1');
+      }
+      closePopover();
+      refreshTableAfterChange();
+    });
+
+    setTimeout(function () {
+      document.addEventListener('mousedown', onDocMouseDown, true);
+      document.addEventListener('keydown', onPopKeydown, true);
+      searchEl.focus();
+    }, 0);
+  }
+
+  // ----- injeta funil em cada <th> visivel -----
+  function ensureFunnels() {
+    var thead = document.querySelector('#obras-table thead tr');
+    if (!thead) return;
+    var ths = thead.querySelectorAll('th[data-col]');
+    ths.forEach(function (th) {
+      if (th.querySelector('.coplan-cf-btn')) return;
+      var col = th.getAttribute('data-col');
+      if (!col) return;
+      var btn = document.createElement('span');
+      btn.className = 'coplan-cf-btn';
+      btn.title = 'Filtrar coluna';
+      btn.setAttribute('data-col', col);
+      var active = !!window.coplanColumnFilters[col]
+        && (window.coplanColumnFilters[col].values.size > 0
+            || window.coplanColumnFilters[col].includeBlank);
+      btn.setAttribute('data-active', active ? '1' : '0');
+      btn.style.cssText = [
+        'display:inline-flex', 'align-items:center',
+        'justify-content:center',
+        'margin-left:4px', 'width:16px', 'height:16px',
+        'border-radius:3px', 'cursor:pointer',
+        'opacity:.55', 'transition:opacity .12s,background .12s',
+        'vertical-align:middle', 'user-select:none',
+      ].join(';');
+      btn.innerHTML = '<i data-lucide="filter" style="width:12px;'
+        + 'height:12px;"></i>';
+      btn.addEventListener('mouseenter', function () {
+        btn.style.opacity = '1';
+        btn.style.background = 'var(--surface-2)';
+      });
+      btn.addEventListener('mouseleave', function () {
+        btn.style.opacity = (btn.getAttribute('data-active') === '1')
+          ? '1' : '.55';
+        btn.style.background = '';
+      });
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openPopover(btn, col);
+      });
+      // Anexa logo antes do col-resizer (que existe como ultimo filho)
+      var resizer = th.querySelector('.col-resizer');
+      if (resizer) th.insertBefore(btn, resizer);
+      else th.appendChild(btn);
+      if (active) {
+        btn.style.opacity = '1';
+        btn.style.color = 'var(--accent)';
+      }
+    });
+    if (window.lucide && window.lucide.createIcons) {
+      try { window.lucide.createIcons(); } catch (e) {}
+    }
+  }
+  // Observa rebuilds do thead para re-injetar.
+  function observeThead() {
+    var thead = document.querySelector('#obras-table thead');
+    if (!thead || thead.__coplanCfObserver) {
+      if (thead) ensureFunnels();
+      return;
+    }
+    thead.__coplanCfObserver = true;
+    var mo = new MutationObserver(function () { ensureFunnels(); });
+    mo.observe(thead, { childList: true, subtree: true });
+    ensureFunnels();
+  }
+
+  // ----- segmented Criterios -----
+  var CRIT_OPTIONS = [
+    { key: '',            label: 'Todas' },
+    { key: 'atenderam',   label: 'Atenderam' },
+    { key: 'falharam',    label: 'Falharam' },
+    { key: 'aprovadas',   label: 'Aprovadas' },
+    { key: 'nao aprovadas', label: 'Não aprovadas' },
+  ];
+  function ensureCriteriosSegmented() {
+    var bar = document.querySelector('#tab-visualizar .filter-bar');
+    if (!bar) return;
+    if (bar.querySelector('#coplan-crit-segmented')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'coplan-crit-segmented';
+    wrap.style.cssText = [
+      'display:inline-flex', 'gap:4px', 'align-items:center',
+      'margin-left:8px',
+    ].join(';');
+    wrap.innerHTML = '<span style="font-size:11.5px;color:var(--text-soft);'
+      + 'font-weight:500;margin-right:4px;">Critérios:</span>';
+    CRIT_OPTIONS.forEach(function (opt) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pill' + (opt.key === '' ? ' active' : '');
+      b.textContent = opt.label;
+      b.setAttribute('data-crit', opt.key);
+      b.addEventListener('click', function () {
+        // toggle: clicar no ja ativo volta pra "Todas"
+        var prev = window.coplanCriteriosFilter || '';
+        var newKey = (prev === opt.key) ? '' : opt.key;
+        window.coplanCriteriosFilter = newKey;
+        wrap.querySelectorAll('.pill').forEach(function (p) {
+          p.classList.toggle(
+            'active',
+            (p.getAttribute('data-crit') || '') === newKey,
+          );
+        });
+        // injeta no coplanFilters para o search_obras processar
+        window.coplanFilters = window.coplanFilters || {};
+        // limpa as chaves antigas de aprovada/criterios pra evitar conflito
+        delete window.coplanFilters.aprovada;
+        delete window.coplanFilters.criterios;
+        if (newKey === 'aprovadas') {
+          window.coplanFilters.aprovada = 'SIM';
+        } else if (newKey === 'nao aprovadas') {
+          window.coplanFilters.aprovada = 'NAO';
+        } else if (newKey === 'atenderam' || newKey === 'falharam') {
+          window.coplanFilters.criterios = newKey;
+        }
+        if (typeof window.coplanApplySearch === 'function') {
+          window.coplanApplySearch();
+        }
+        renderChips();
+      });
+      wrap.appendChild(b);
+    });
+    // Insere apos a search-input
+    var searchEl = bar.querySelector('.search-input');
+    if (searchEl && searchEl.nextSibling) {
+      bar.insertBefore(wrap, searchEl.nextSibling);
+    } else {
+      bar.appendChild(wrap);
+    }
+  }
+
+  // ----- chips -----
+  function critLabel(key) {
+    for (var i = 0; i < CRIT_OPTIONS.length; i++) {
+      if (CRIT_OPTIONS[i].key === key) return CRIT_OPTIONS[i].label;
+    }
+    return key;
+  }
+  function renderChips() {
+    var list = document.getElementById('filter-chips-list');
+    var count = document.getElementById('filter-chips-count');
+    if (!list) return;
+    list.innerHTML = '';
+    var n = 0;
+
+    function addChip(html, onRemove) {
+      var span = document.createElement('span');
+      span.className = 'badge';
+      span.style.cssText = 'display:inline-flex;align-items:center;'
+        + 'gap:4px;background:var(--surface-2);'
+        + 'border:1px solid var(--border);padding:2px 6px;'
+        + 'font-size:11px;';
+      span.innerHTML = html
+        + ' <button type="button" style="background:none;border:0;'
+        + 'cursor:pointer;color:var(--text-soft);font-size:13px;'
+        + 'line-height:1;padding:0 0 0 2px;">×</button>';
+      span.querySelector('button').addEventListener('click', onRemove);
+      list.appendChild(span);
+      n++;
+    }
+
+    // Critérios chip
+    var crit = window.coplanCriteriosFilter || '';
+    if (crit) {
+      addChip('Critérios: <strong>' + esc(critLabel(crit)) + '</strong>',
+        function () {
+          window.coplanCriteriosFilter = '';
+          window.coplanFilters = window.coplanFilters || {};
+          delete window.coplanFilters.aprovada;
+          delete window.coplanFilters.criterios;
+          var bar = document.getElementById('coplan-crit-segmented');
+          if (bar) {
+            bar.querySelectorAll('.pill').forEach(function (p) {
+              p.classList.toggle(
+                'active',
+                (p.getAttribute('data-crit') || '') === '',
+              );
+            });
+          }
+          if (typeof window.coplanApplySearch === 'function') {
+            window.coplanApplySearch();
+          }
+        });
+    }
+
+    // Column filter chips
+    var cf = window.coplanColumnFilters || {};
+    Object.keys(cf).forEach(function (col) {
+      var spec = cf[col];
+      if (!spec) return;
+      var parts = [];
+      if (spec.values && spec.values.size) {
+        var arr = [];
+        spec.values.forEach(function (v) { arr.push(v); });
+        arr.sort();
+        var preview = arr.slice(0, 3).join(', ');
+        if (arr.length > 3) preview += ' +' + (arr.length - 3);
+        parts.push(preview);
+      }
+      if (spec.includeBlank) parts.push('(Vazios)');
+      if (!parts.length) return;
+      addChip(
+        esc(humanize(col)) + ': <strong>' + esc(parts.join(' / '))
+          + '</strong>',
+        function () {
+          delete window.coplanColumnFilters[col];
+          var th = document.querySelector(
+            '#obras-table thead th[data-col="' + col.replace(/"/g, '\\"')
+              + '"] .coplan-cf-btn');
+          if (th) th.setAttribute('data-active', '0');
+          refreshTableAfterChange();
+        });
+    });
+
+    if (count) {
+      count.textContent = n ? (n + ' filtro' + (n > 1 ? 's' : '')) : '—';
+    }
+    var bar = document.getElementById('filter-chips-bar');
+    if (bar) bar.style.display = n ? '' : 'none';
+  }
+  window.coplanRenderFilterChips = renderChips;
+
+  // ----- "Limpar" geral: tambem limpa col filters + critrios -----
+  function hookLimparBtn() {
+    var visTab = document.getElementById('tab-visualizar');
+    if (!visTab) return;
+    var btns = visTab.querySelectorAll('.filter-bar .btn');
+    btns.forEach(function (b) {
+      var t = b.textContent.trim().toLowerCase();
+      if (t !== 'limpar') return;
+      if (b.__coplanCfLimparHook) return;
+      b.__coplanCfLimparHook = true;
+      b.addEventListener('click', function () {
+        window.coplanColumnFilters = {};
+        window.coplanCriteriosFilter = '';
+        window.coplanFilters = window.coplanFilters || {};
+        delete window.coplanFilters.aprovada;
+        delete window.coplanFilters.criterios;
+        var crBar = document.getElementById('coplan-crit-segmented');
+        if (crBar) {
+          crBar.querySelectorAll('.pill').forEach(function (p) {
+            p.classList.toggle(
+              'active',
+              (p.getAttribute('data-crit') || '') === '',
+            );
+          });
+        }
+        document.querySelectorAll(
+          '#obras-table thead .coplan-cf-btn[data-active="1"]'
+        ).forEach(function (el) { el.setAttribute('data-active', '0'); });
+        renderChips();
+      });
+    });
+  }
+
+  // coplanFilteredCods (definida em IIFE anterior) so olha coplanQuery
+  // + coplanFilters. Estendemos para considerar tambem column filters.
+  function patchFilteredCods() {
+    if (typeof window.coplanFilteredCods !== 'function') return;
+    if (window.coplanFilteredCods.__coplanCfPatched) return;
+    var orig = window.coplanFilteredCods;
+    var patched = function () {
+      var r = orig.apply(this, arguments);
+      if (r !== null) return r;
+      // Origem retornou null = "sem filtro de texto/segmented". Se ha
+      // column filter, devolve a lista efetiva de cods.
+      if (!hasAnyColFilter()) return null;
+      var rows = window.coplanObras || [];
+      var out = [];
+      for (var i = 0; i < rows.length; i++) {
+        var c = rows[i] && rows[i].cod;
+        if (c) out.push(String(c));
+      }
+      return out;
+    };
+    patched.__coplanCfPatched = true;
+    window.coplanFilteredCods = patched;
+  }
+
+  function init() {
+    patchLoadAndSearch();
+    patchFilteredCods();
+    ensureCriteriosSegmented();
+    observeThead();
+    hookLimparBtn();
+    renderChips();
+    // re-tenta apos um tick caso a barra/tabela ainda nao tenha sido
+    // injetada por outras IIFEs.
+    setTimeout(function () {
+      patchLoadAndSearch();
+      patchFilteredCods();
+      ensureCriteriosSegmented();
+      observeThead();
+      hookLimparBtn();
+    }, 100);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
 """
 
 
