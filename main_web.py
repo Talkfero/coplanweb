@@ -1539,7 +1539,7 @@ class CoplanApi:
 
     def export_detalhamento(self, cods: Any = None) -> dict[str, Any]:
         """Exporta as obras selecionadas (ou todas) para XLSX em
-        ~/Downloads. Retorna {ok, path, count, error}."""
+        ~/Downloads. Retorna {ok, path, count, error, cenario}."""
         db, err = self._ensure_db_connected()
         if err or db is None:
             return {"ok": False, "path": "", "count": 0, "error": err or "db indisponivel"}
@@ -1553,8 +1553,17 @@ class CoplanApi:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "path": "", "count": 0, "error": f"fetch: {exc}"}
 
-        # Cenario ativo: restringe + aplica overrides (paridade get_obras)
+        # Cenario ativo: restringe + aplica overrides (paridade get_obras).
+        # Loga para diagnostico: cenario={X}, rows antes/depois.
+        cen_nome = self._cenario_active_name()
+        before_n = len(raw_rows)
         raw_rows = self._apply_cenario_to_rows(db, raw_rows, cols)
+        print(
+            f"[main_web] export_detalhamento: cenario={cen_nome!r}, "
+            f"cods_in={len(cods_list)}, rows_before={before_n}, "
+            f"rows_after={len(raw_rows)}",
+            file=sys.stderr,
+        )
 
         try:
             from openpyxl import Workbook  # type: ignore[import-not-found]
@@ -1587,6 +1596,7 @@ class CoplanApi:
         return {
             "ok": True, "path": str(path),
             "count": len(raw_rows), "error": "",
+            "cenario": cen_nome,
         }
 
     # ------------------------------------------------------------------
@@ -22420,7 +22430,14 @@ COPLAN_BRIDGE_JS = """
         }
         prom.then(function (r) {
           if (r && r.ok && typeof window.coplanToast === 'function') {
-            window.coplanToast('XLSX salvo: ' + r.path, 'info');
+            var msg = 'XLSX salvo (' + (r.count || 0) + ' obras';
+            if (r.cenario) {
+              msg += ', cenario=' + r.cenario;
+            } else {
+              msg += ', sem cenario';
+            }
+            msg += '): ' + r.path;
+            window.coplanToast(msg, 'info');
           } else if (r && typeof window.coplanToast === 'function') {
             window.coplanToast('Falha: ' + (r.error || '?'), 'error');
           }
