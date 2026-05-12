@@ -12196,8 +12196,16 @@ COPLAN_BRIDGE_JS = """
     // atualizar_obras_valores_async (a 1a iniciava, as demais batiam no
     // guard "ja ha uma operacao em andamento").
     if (bar.__coplanToolbarBound) return true;
-    bar.__coplanToolbarBound = true;
     var api = window.pywebview && window.pywebview.api;
+    // Se a API ainda nao foi injetada pelo pywebview (race no boot),
+    // NAO marca como bound -- senao todos os clicks subsequentes batem
+    // em "API indisponivel". Deixa os triggers (coplan:tab, coplan:obras)
+    // re-tentarem ate api estar pronta. handlers leem api via closure,
+    // entao precisa ja existir aqui.
+    if (!api || typeof api.atualizar_obras_valores !== 'function') {
+      return false;
+    }
+    bar.__coplanToolbarBound = true;
 
     // Atualizar: replica legado (atualizar_obra_mixin.py:34-36).
     // Exige selecao; com COD selecionados, recalcula valor_obra via
