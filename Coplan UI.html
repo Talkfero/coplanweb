@@ -894,9 +894,10 @@
             <input id="filter-input" type="text" placeholder="Busca inteligente em todos os campos (use ; para múltiplos termos)" />
             <kbd>Ctrl</kbd><kbd>F</kbd>
           </div>
-          <button class="btn" id="btn-modal-filtros"><i data-lucide="filter"></i> Filtros avançados</button>
-          <!-- Botao "Colunas" REMOVIDO do mock: o JS injeta um equivalente
-               funcional (#coplan-btn-config-cols) que persiste config.json. -->
+          <!-- Critérios + filtros por coluna injetados via JS
+               (coplanColFilters). Botão "Filtros avançados" e o
+               botão "Colunas" do mock foram substituídos pelos
+               funis por coluna (Excel-style) + segmented Critérios. -->
           <button class="btn ghost"><i data-lucide="x"></i> Limpar</button>
         </div>
 
@@ -1930,8 +1931,9 @@
   // ====== Modal control ======
   function openModal(id) { document.getElementById(id).style.display = 'grid'; }
   function closeModal(id) { document.getElementById(id).style.display = 'none'; }
-  document.getElementById('btn-modal-filtros').addEventListener('click', () => openModal('modal-filtros'));
-  document.getElementById('btn-modal-pi').addEventListener('click', () => openModal('modal-pi'));
+  // btn-modal-filtros removido: filtros agora são por coluna (Excel-style).
+  var __btnModalPi = document.getElementById('btn-modal-pi');
+  if (__btnModalPi) __btnModalPi.addEventListener('click', () => openModal('modal-pi'));
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', e => {
     e.target.closest('.modal-backdrop').style.display = 'none';
   }));
