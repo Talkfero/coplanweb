@@ -97,38 +97,53 @@ class ExportarExcelMixin:
         # Captura apenas as linhas visíveis atualmente selecionadas
         visible_indices = self.table_obras.selectedVisibleRows()
 
-        # Se nenhuma linha foi selecionada (ou nenhuma selecionada está visível)
+        # Quando o usuário não selecionou nada, o escopo deve cobrir TODAS as
+        # obras correspondentes ao filtro atual -- inclusive as que estão em
+        # outras páginas da grade (a paginação é só uma limitação de exibição).
+        use_full_filtered_scope = False
         if not visible_indices:
             reply = QtWidgets.QMessageBox.question(
                 self,
                 "Exportar",
-                "Nenhuma obra foi selecionada. Deseja exportar todas as obras visíveis?",
+                "Nenhuma obra foi selecionada. Deseja exportar todas as obras correspondentes ao filtro atual (todas as páginas)?",
                 QtWidgets.QMessageBox.StandardButton.Yes
                 | QtWidgets.QMessageBox.StandardButton.No,
                 QtWidgets.QMessageBox.StandardButton.No,
             )
             if reply == QtWidgets.QMessageBox.StandardButton.Yes:
-                col_cod = self.col_index("cod")
-                visible_indices = [
-                    QtCore.QModelIndex(self.table_obras.model().index(row, col_cod))
-                    for row in range(self.table_obras.rowCount())
-                    if not self.table_obras.isRowHidden(row)
-                ]
+                use_full_filtered_scope = True
             else:
                 return
+
+        if use_full_filtered_scope:
+            ganhos_rows = self._build_rows_from_filtered_for_ganhos_check()
+        else:
+            ganhos_rows = get_selected_or_visible_rows(self.table_obras)
         if not require_ganhos_ok_or_confirm(
             self,
-            get_selected_or_visible_rows(self.table_obras),
+            ganhos_rows,
             "Exportar Excel",
         ):
             return
 
         idx_cod = self.col_index("cod")
-        selected_ids = []
-        for index in visible_indices:
-            item = self.table_obras.item(index.row(), idx_cod) if idx_cod >= 0 else None
-            selected_ids.append(item.text() if item else "")
-        selected_ids = [str(cod).strip() for cod in selected_ids if str(cod).strip()]
+        if use_full_filtered_scope:
+            seen: set[str] = set()
+            selected_ids: list[str] = []
+            for row_data, _atende in (getattr(self, "_visualizar_filtered_rows", None) or []):
+                if idx_cod < 0 or idx_cod >= len(row_data):
+                    continue
+                cod = str(row_data[idx_cod]).strip()
+                if not cod or cod in seen:
+                    continue
+                seen.add(cod)
+                selected_ids.append(cod)
+        else:
+            selected_ids = []
+            for index in visible_indices:
+                item = self.table_obras.item(index.row(), idx_cod) if idx_cod >= 0 else None
+                selected_ids.append(item.text() if item else "")
+            selected_ids = [str(cod).strip() for cod in selected_ids if str(cod).strip()]
         if not selected_ids:
             QtWidgets.QMessageBox.information(
                 self,
@@ -241,6 +256,39 @@ class ExportarExcelMixin:
         if clicked == btn_cancel:
             return None
         return button_map.get(clicked)
+
+    def _build_rows_from_filtered_for_ganhos_check(self) -> list[dict]:
+        """Converte ``_visualizar_filtered_rows`` (todas as páginas) em dicts
+        com o mesmo formato que ``get_selected_or_visible_rows`` produz para a
+        ``table_obras``: chaves = textos dos cabeçalhos da grade, valores =
+        ``str(...).strip()``. Mantém o check de ganhos consistente com o
+        escopo expandido do export.
+        """
+        tabela = getattr(self, "table_obras", None)
+        if tabela is None or tabela.columnCount() == 0:
+            return []
+        headers: list[str] = []
+        for col in range(tabela.columnCount()):
+            header_item = tabela.horizontalHeaderItem(col)
+            if header_item:
+                headers.append(header_item.text().strip())
+            else:
+                header = tabela.model().headerData(
+                    col, QtCore.Qt.Orientation.Horizontal
+                )
+                headers.append(
+                    str(header).strip() if header is not None else f"col_{col}"
+                )
+        rows: list[dict] = []
+        for row_data, _atende in (
+            getattr(self, "_visualizar_filtered_rows", None) or []
+        ):
+            row_dict: dict[str, str] = {}
+            for col, header in enumerate(headers):
+                value = row_data[col] if col < len(row_data) else ""
+                row_dict[header] = "" if value is None else str(value).strip()
+            rows.append(row_dict)
+        return rows
 
     def _get_visible_db_columns_from_table(self) -> list[str]:
         tabela = getattr(self, "table_obras", None)
