@@ -287,6 +287,19 @@ class CoplanApi:
                 for c in chaves:
                     lines.append(str(c))
                 lines.append("")
+            preservadas_msgs = result.get("preservadas_msgs") or []
+            if preservadas_msgs:
+                lines.append(
+                    f"-- Valores preservados ({len(preservadas_msgs)}) --"
+                )
+                lines.append(
+                    "Obras com calculo parcial (chave extra ausente ou "
+                    "sem valor) que JA TINHAM valor no banco: o valor "
+                    "antigo foi mantido."
+                )
+                for m in preservadas_msgs:
+                    lines.append(str(m))
+                lines.append("")
             duplicadas = result.get("duplicadas") or []
             if duplicadas:
                 lines.append(f"-- Duplicadas ({len(duplicadas)}) --")
@@ -3475,8 +3488,18 @@ class CoplanApi:
             r for r in results
             if r.sucesso_base and r.valor_obra_formatado and str(r.cod or "").strip()
         ]
+        # Index inputs por COD para conseguir ler o valor_obra atual
+        # do banco antes de decidir sobrescrever (regra de preservacao
+        # abaixo).
+        input_by_cod = {}
+        for _inp in inputs:
+            _c = str(getattr(_inp, "cod", "") or "").strip()
+            if _c:
+                input_by_cod[_c] = _inp
         total_write = len(to_write)
         atualizadas = 0
+        preservadas = 0
+        preservadas_msgs: list[str] = []
         update_falhas: list[str] = []
         busy_msg = ""
         if not cancelled and total_write > 0:
@@ -3486,6 +3509,43 @@ class CoplanApi:
         if not cancelled:
             for i, r_obra in enumerate(to_write, 1):
                 cod_s = str(r_obra.cod or "").strip()
+
+                # Regra de preservacao: se a calculo teve motivos_falha
+                # (chave extra ausente OU valor invalido em alguma extra)
+                # e a obra ja tem valor_obra gravado no DB, NAO sobrescreve
+                # com o calculo parcial. Loga preservacao. Quando obra NAO
+                # tem valor_obra, segue update normal (nao ha o que perder).
+                motivos_problema = list(r_obra.motivos_falha or [])
+                if motivos_problema:
+                    inp_cur = input_by_cod.get(cod_s)
+                    existing_val = ""
+                    if inp_cur is not None:
+                        try:
+                            existing_val = str(
+                                inp_cur.obra_data_map.get("valor_obra", "")
+                                or ""
+                            ).strip()
+                        except Exception:  # noqa: BLE001
+                            existing_val = ""
+                    if existing_val:
+                        msg = (
+                            f"COD={cod_s}: valor preservado "
+                            f"(DB={existing_val}, calc_parcial="
+                            f"{r_obra.valor_obra_formatado}) - motivos: "
+                            f"{'; '.join(motivos_problema)}"
+                        )
+                        preservadas += 1
+                        preservadas_msgs.append(msg)
+                        print(f"[main_web] {msg}", file=sys.stderr)
+                        if (i % 5) == 0 or i == total_write:
+                            if _emit(
+                                i, total_write,
+                                f"Salvando... ({i}/{total_write})",
+                            ):
+                                cancelled = True
+                                break
+                        continue
+
                 try:
                     db.update_obra(
                         {"valor_obra": r_obra.valor_obra_formatado},
@@ -3524,6 +3584,8 @@ class CoplanApi:
             "total": len(inputs),
             "processadas_ok": processadas_ok,
             "atualizadas": atualizadas,
+            "preservadas": preservadas,
+            "preservadas_msgs": preservadas_msgs,
             "falhas_total": falhas_total + len(update_falhas),
             "falhas": falhas_full,
             "chaves_inexistentes": sorted(chaves_inex),
@@ -3533,13 +3595,16 @@ class CoplanApi:
         if cancelled:
             out["cancelled"] = True
         # Auto-log em <HERE>/logs sempre que houver qualquer coisa
-        # diferente de sucesso pleno (chaves inexistentes incluso). O
-        # usuario nao depende do modal -- arquivo SEMPRE existe.
-        if self._result_has_errors(out):
+        # diferente de sucesso pleno (chaves inexistentes / preservadas
+        # incluso). O usuario nao depende do modal -- arquivo SEMPRE existe.
+        if self._result_has_errors(out) or preservadas > 0:
             out["log_path"] = self._write_op_log(
                 "atualizar", out,
-                meta={"cods_solicitados": len(cods_list) if cods_list
-                      else "todos"},
+                meta={
+                    "cods_solicitados": (len(cods_list) if cods_list
+                                         else "todos"),
+                    "preservadas": preservadas,
+                },
             )
         return out
 
@@ -27381,7 +27446,9 @@ COPLAN_BRIDGE_JS = """
     if (!r) return 'Falha desconhecida';
     var falhas = r.falhas_total || 0;
     var inex = (r.chaves_inexistentes || []).length;
+    var preserv = r.preservadas || 0;
     var partes = [(r.atualizadas || 0) + ' atualizada(s)'];
+    if (preserv > 0) partes.push(preserv + ' preservada(s)');
     if (falhas > 0) partes.push(falhas + ' falha(s)');
     if (inex > 0) partes.push(inex + ' chave(s) inexistente(s)');
     return partes.join(' / ');
@@ -27402,6 +27469,7 @@ COPLAN_BRIDGE_JS = """
     if (r.cancelled) return true;
     if ((r.falhas_total || 0) > 0) return true;
     if ((r.chaves_inexistentes || []).length > 0) return true;
+    if ((r.preservadas || 0) > 0) return true;
     return false;
   }
 
@@ -27418,6 +27486,12 @@ COPLAN_BRIDGE_JS = """
       sections.push({
         label: 'Chaves inexistentes (' + r.chaves_inexistentes.length + ')',
         lines: r.chaves_inexistentes.slice(),
+      });
+    }
+    if (r && r.preservadas_msgs && r.preservadas_msgs.length) {
+      sections.push({
+        label: 'Valores preservados (' + r.preservadas_msgs.length + ')',
+        lines: r.preservadas_msgs.slice(),
       });
     }
     if (r && r.error) {
