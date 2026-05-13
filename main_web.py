@@ -300,6 +300,19 @@ class CoplanApi:
                 for m in preservadas_msgs:
                     lines.append(str(m))
                 lines.append("")
+            diag = result.get("diagnostico") or []
+            if diag:
+                lines.append(
+                    f"-- Diagnostico por obra falha ({len(diag)}) --"
+                )
+                lines.append(
+                    "Listing input values + chave tentada para CADA obra "
+                    "que falhou. Use isto para comparar com o calculo "
+                    "feito na aba Cadastro (botao Calcular)."
+                )
+                for d in diag:
+                    lines.append(str(d))
+                lines.append("")
             duplicadas = result.get("duplicadas") or []
             if duplicadas:
                 lines.append(f"-- Duplicadas ({len(duplicadas)}) --")
@@ -3412,7 +3425,14 @@ class CoplanApi:
                 return pi
 
         inputs: list[Any] = []
+        extracao_falhas: list[str] = []
+        cod_idx = cols.index("cod") if "cod" in cols else -1
         for r in rows:
+            row_cod = ""
+            try:
+                row_cod = str(r[cod_idx]) if cod_idx >= 0 else ""
+            except Exception:  # noqa: BLE001
+                row_cod = ""
             try:
                 inp = extrair_obra_input(
                     r, cols, pi_base_fallback_fn=_pi_base_fallback,
@@ -3420,8 +3440,9 @@ class CoplanApi:
                 inputs.append(inp)
             except Exception as exc:  # noqa: BLE001
                 # Erro de extracao -- nao bloqueia; conta como falha.
-                print(f"[main_web] extrair_obra_input cod={r}: {exc}",
-                      file=sys.stderr)
+                msg = f"COD={row_cod or 'N/D'}: extrair_obra_input: {exc}"
+                extracao_falhas.append(msg)
+                print(f"[main_web] {msg}", file=sys.stderr)
 
         def _pi_extras(pi: str) -> list[str]:
             try:
@@ -3432,12 +3453,18 @@ class CoplanApi:
         # Fase 1 (calculo): loop equivalente a processar_atualizacao, mas
         # com hooks de progresso/cancel por obra. Reproduz a mesma
         # contabilidade (falhas_max=5, set de chaves_inexistentes).
+        # Fase 1 (calculo): loop equivalente a processar_atualizacao, mas
+        # com hooks de progresso/cancel por obra. Reproduz a mesma
+        # contabilidade (falhas_max=5, set de chaves_inexistentes).
+        # Tambem coleta diagnostico por obra para o log (input values +
+        # chave tentada) -- ajuda a entender por que uma obra falhou.
         total_calc = len(inputs)
         results: list[Any] = []
         processadas_ok = 0
         falhas_total = 0
         falhas: list[str] = []
         chaves_inex: set[str] = set()
+        diag_failed: list[str] = []  # diagnostico por obra que falhou
         cancelled = False
         if _emit(0, max(total_calc, 1),
                  f"Calculando valor de {total_calc} obra(s)..."):
@@ -3463,10 +3490,34 @@ class CoplanApi:
                     falhas_total += 1
                     if len(falhas) < 5:
                         falhas.append(f"COD={inp.cod or 'N/D'}: {exc}")
+                    diag_failed.append(
+                        f"COD={inp.cod or 'N/D'} EXC={exc} "
+                        f"pi_base={inp.pi_base!r} "
+                        f"projeto={inp.projeto_investimento!r} "
+                        f"nivel_tensao={inp.nivel_tensao!r} "
+                        f"carac={inp.caracteristicas_material!r} "
+                        f"regional={inp.nome_regional!r} "
+                        f"qtd={inp.quantidade_material!r}"
+                    )
                     continue
                 results.append(result)
                 if result.sucesso_base:
                     processadas_ok += 1
+                else:
+                    # Falha bloqueante (regional/chave/qtd invalida etc.):
+                    # registra diagnostico completo para o log.
+                    diag_failed.append(
+                        f"COD={inp.cod or 'N/D'} "
+                        f"chave_tentada={result.chave_completa or '(nao montou)'} "
+                        f"motivos={list(result.motivos_falha)} "
+                        f"pi_base={inp.pi_base!r} "
+                        f"projeto={inp.projeto_investimento!r} "
+                        f"nivel_tensao={inp.nivel_tensao!r} "
+                        f"carac={inp.caracteristicas_material!r} "
+                        f"regional={inp.nome_regional!r} "
+                        f"qtd={inp.quantidade_material!r} "
+                        f"extras={list(extras)}"
+                    )
                 for motivo in result.motivos_falha:
                     falhas_total += 1
                     if len(falhas) < 5:
@@ -3576,7 +3627,8 @@ class CoplanApi:
                         cancelled = True
                         break
 
-        falhas_full = list(falhas) + update_falhas
+        falhas_full = list(falhas) + update_falhas + extracao_falhas
+        falhas_total += len(extracao_falhas)
         ok_flag = not busy_msg and not cancelled
         err_str = busy_msg or ("cancelado" if cancelled else "")
         out: dict[str, Any] = {
@@ -3589,6 +3641,7 @@ class CoplanApi:
             "falhas_total": falhas_total + len(update_falhas),
             "falhas": falhas_full,
             "chaves_inexistentes": sorted(chaves_inex),
+            "diagnostico": diag_failed,
         }
         if busy_msg:
             out["blocked"] = "db_busy"
