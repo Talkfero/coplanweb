@@ -6592,6 +6592,87 @@ class CoplanApi:
             _OP_STATE["cancel_requested"] = True
         return {"ok": True, "error": ""}
 
+    # ------------------------------------------------------------------
+    # save_log_txt: salva o conteudo de texto montado pelo modal de
+    # detalhes pos-operacao (chaves inexistentes, falhas, erros, etc.).
+    # Default folder = <HERE>/logs. Usuario escolhe nome final via
+    # SAVE dialog. Usado por window.coplanShowErrorDetails (botao
+    # "Salvar TXT...").
+    # ------------------------------------------------------------------
+    def save_log_txt(
+        self, content: Any = "", default_name: Any = "log.txt",
+    ) -> dict[str, Any]:
+        try:
+            import webview  # type: ignore[import-not-found]
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "path": "",
+                    "error": f"pywebview indisponivel: {exc}"}
+        text = str(content or "")
+        name = str(default_name or "log.txt").strip() or "log.txt"
+        # Sanitiza nome: troca caracteres problematicos em filenames.
+        import re as _re_log
+        name = _re_log.sub(r'[\\/:*?"<>|]', "_", name)
+        if not name.lower().endswith(".txt"):
+            name = name + ".txt"
+        try:
+            wins = webview.windows
+            if not wins:
+                return {"ok": False, "path": "",
+                        "error": "janela nao encontrada"}
+            dlg = self._wv_dialog_const("SAVE")
+            if dlg is None:
+                return {"ok": False, "path": "",
+                        "error": "SAVE dialog indisponivel"}
+            logs_dir = HERE / "logs"
+            try:
+                logs_dir.mkdir(exist_ok=True)
+            except Exception:  # noqa: BLE001
+                pass
+            file_types = ("Texto (*.txt)", "Todos os arquivos (*.*)")
+            result = wins[0].create_file_dialog(
+                dlg, save_filename=name,
+                directory=str(logs_dir),
+                file_types=file_types,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "path": "",
+                    "error": f"file dialog: {exc}"}
+        if not result:
+            return {"ok": False, "path": "", "error": "cancelado"}
+        path = result if isinstance(result, str) else (
+            result[0] if result else "")
+        if not path:
+            return {"ok": False, "path": "", "error": "caminho vazio"}
+        try:
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write(text)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "path": "",
+                    "error": f"escrita: {exc}"}
+        return {"ok": True, "path": str(path), "error": ""}
+
+    def open_logs_folder(self) -> dict[str, Any]:
+        """Abre <HERE>/logs no file manager do OS. Cria a pasta se
+        ainda nao existir. Usado pelo modal de detalhes."""
+        logs_dir = HERE / "logs"
+        try:
+            logs_dir.mkdir(exist_ok=True)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "path": str(logs_dir),
+                    "error": f"mkdir: {exc}"}
+        try:
+            import subprocess
+            if sys.platform.startswith("win"):
+                os.startfile(str(logs_dir))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.run(["open", str(logs_dir)], check=False)
+            else:
+                subprocess.run(["xdg-open", str(logs_dir)], check=False)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "path": str(logs_dir),
+                    "error": f"open: {exc}"}
+        return {"ok": True, "path": str(logs_dir), "error": ""}
+
     def import_excel_async(
         self, path: Any = "", strategy: Any = "merge",
     ) -> dict[str, Any]:
@@ -12250,7 +12331,13 @@ COPLAN_BRIDGE_JS = """
           toast('Exportando ' + label + '...', 'info');
           return api.export_detalhamento(cods).then(function (r) {
             if (r && r.ok) toast('XLSX salvo: ' + r.path, 'info');
-            else toast('Falhou: ' + (r && r.error || '?'), 'error');
+            else {
+              toast('Falhou: ' + (r && r.error || '?'), 'error');
+              if (window.coplanReportError) {
+                window.coplanReportError(
+                  'Exportar Detalhamento', 'export_detalhamento', r);
+              }
+            }
           });
         });
       });
@@ -12275,13 +12362,27 @@ COPLAN_BRIDGE_JS = """
           guard('Relatorio detalhado por projeto', presets.export_full, function () {
             toast('Gerando relatorio detalhado por projeto...', 'info');
             return api.export_relatorio_criterios_projeto(null).then(function (r) {
-              if (!r) return toast('Sem resposta', 'error');
+              if (!r) {
+                toast('Sem resposta', 'error');
+                if (window.coplanReportError) {
+                  window.coplanReportError(
+                    'Relatorio detalhado por projeto',
+                    'export_relatorio_criterios_projeto',
+                    { error: 'Sem resposta da API' });
+                }
+                return;
+              }
               if (r.ok) {
                 toast(r.count_projetos + ' projeto(s) / '
                       + r.count_alimentadores + ' alim em '
                       + r.path, 'info');
               } else {
                 toast('Falhou: ' + (r.error || '?'), 'error');
+                if (window.coplanReportError) {
+                  window.coplanReportError(
+                    'Relatorio detalhado por projeto',
+                    'export_relatorio_criterios_projeto', r);
+                }
               }
             });
           });
@@ -12316,10 +12417,26 @@ COPLAN_BRIDGE_JS = """
           guard('Relatorio de criterios', presets.export_full, function () {
             toast('Gerando relatorio de criterios (' + scope + ')...', 'info');
             return api.export_relatorio_criterios(cods).then(function (r) {
-              if (!r) return toast('Sem resposta', 'error');
+              if (!r) {
+                toast('Sem resposta', 'error');
+                if (window.coplanReportError) {
+                  window.coplanReportError(
+                    'Relatorio de criterios',
+                    'export_relatorio_criterios',
+                    { error: 'Sem resposta da API' });
+                }
+                return;
+              }
               if (r.ok && r.count) toast(r.count + ' falhas em ' + r.path, 'warn');
               else if (r.ok && !r.count) toast(r.error || 'Tudo atendeu', 'info');
-              else toast('Falhou: ' + (r.error || '?'), 'error');
+              else {
+                toast('Falhou: ' + (r.error || '?'), 'error');
+                if (window.coplanReportError) {
+                  window.coplanReportError(
+                    'Relatorio de criterios',
+                    'export_relatorio_criterios', r);
+                }
+              }
             });
           });
         });
@@ -12337,7 +12454,13 @@ COPLAN_BRIDGE_JS = """
         guard('Nota de Colapso', presets.export_full, function () {
           return api.export_nota_colapso(cods).then(function (r) {
             if (r && r.ok) toast('Nota gerada: ' + r.path, 'info');
-            else toast(r && r.error || 'TODO', 'warn');
+            else {
+              toast(r && r.error || 'TODO', 'warn');
+              if (window.coplanReportError) {
+                window.coplanReportError(
+                  'Nota de Colapso', 'export_nota_colapso', r);
+              }
+            }
           });
         });
       });
@@ -12366,9 +12489,18 @@ COPLAN_BRIDGE_JS = """
           api.delete_obras(cleanCods).then(function (r) {
             if (r && r.ok) {
               toast(r.deleted + ' obra(s) excluida(s)', 'info');
+              // Mesmo com ok=true, pode haver erros por linha
+              if (window.coplanReportError && r && r.errors && r.errors.length) {
+                window.coplanReportError(
+                  'Excluir obras', 'delete_obras', r);
+              }
             } else {
               toast('Erros: ' + ((r && r.errors || []).slice(0, 3).join('; ')),
                     'error');
+              if (window.coplanReportError) {
+                window.coplanReportError(
+                  'Excluir obras', 'delete_obras', r);
+              }
             }
             if (typeof window.coplanLoadObras === 'function') {
               window.coplanLoadObras();
@@ -14286,9 +14418,20 @@ COPLAN_BRIDGE_JS = """
                               + cods.join(', '))) return;
           toast('Excluindo...', 'info');
           api.delete_obras(cods).then(function (r) {
-            if (r && r.ok) toast(r.deleted + ' obra(s) excluida(s)', 'info');
-            else toast('Erros: ' + ((r && r.errors || []).slice(0,3).join('; ')),
+            if (r && r.ok) {
+              toast(r.deleted + ' obra(s) excluida(s)', 'info');
+              if (window.coplanReportError && r && r.errors && r.errors.length) {
+                window.coplanReportError(
+                  'Excluir obras', 'delete_obras', r);
+              }
+            } else {
+              toast('Erros: ' + ((r && r.errors || []).slice(0,3).join('; ')),
                        'error');
+              if (window.coplanReportError) {
+                window.coplanReportError(
+                  'Excluir obras', 'delete_obras', r);
+              }
+            }
             if (window.coplanLoadObras) window.coplanLoadObras();
           });
         },
@@ -14734,6 +14877,9 @@ COPLAN_BRIDGE_JS = """
       } else {
         if (typeof window.coplanToast === 'function') {
           window.coplanToast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+        if (window.coplanReportError) {
+          window.coplanReportError('Salvar Obra', 'save_obra', r);
         }
       }
       return r;
@@ -15753,11 +15899,39 @@ COPLAN_BRIDGE_JS = """
                                  r.chaves_inexistentes && r.chaves_inexistentes.length
                                    ? 'warn' : 'info');
             }
+            // Mesmo com sucesso, se houve chaves inexistentes ou
+            // motivos de falha (extras), mostra o modal pro usuario
+            // ver QUAIS chaves nao foram encontradas.
+            if (window.coplanReportError
+                && ((r.chaves_inexistentes && r.chaves_inexistentes.length)
+                    || (r.motivos_falha && r.motivos_falha.length))) {
+              window.coplanReportError(
+                'Calcular Valor da Obra', 'calcular_valor_obra',
+                {
+                  ok: true,
+                  chaves_inexistentes: r.chaves_inexistentes || [],
+                  falhas: (r.motivos_falha || []).map(function (m) {
+                    return String(m);
+                  }),
+                  falhas_total: (r.motivos_falha || []).length,
+                });
+            }
           } else {
             if (typeof window.coplanToast === 'function') {
               window.coplanToast('Falha: '
                 + (r.error || (r.motivos_falha || []).join('; ') || '?'),
                 'error');
+            }
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Calcular Valor da Obra', 'calcular_valor_obra',
+                {
+                  ok: false,
+                  error: r && r.error,
+                  chaves_inexistentes: (r && r.chaves_inexistentes) || [],
+                  falhas: ((r && r.motivos_falha) || []).map(String),
+                  falhas_total: ((r && r.motivos_falha) || []).length,
+                });
             }
           }
         });
@@ -17841,7 +18015,11 @@ COPLAN_BRIDGE_JS = """
           }
           break;
         case 'val':
-          if (a && a.atualizar_obras_valores) {
+          // Roteia pelo helper bulk (mesmo toast + progress + modal
+          // de detalhes quando ha falhas/chaves inexistentes).
+          if (typeof window.coplanAtualizarBulk === 'function') {
+            window.coplanAtualizarBulk([cod]);
+          } else if (a && a.atualizar_obras_valores) {
             toast('Atualizando valor...', 'info');
             a.atualizar_obras_valores([cod]).then(function (r) {
               toast(r && r.ok
@@ -17886,8 +18064,19 @@ COPLAN_BRIDGE_JS = """
           if (!window.confirm('Excluir obra ' + cod + '?')) return;
           if (a && a.delete_obras) {
             a.delete_obras([cod]).then(function (r) {
-              if (r && r.ok) toast('Excluida', 'info');
-              else toast('Falha', 'error');
+              if (r && r.ok) {
+                toast('Excluida', 'info');
+                if (window.coplanReportError && r && r.errors && r.errors.length) {
+                  window.coplanReportError(
+                    'Excluir obra ' + cod, 'delete_obras', r);
+                }
+              } else {
+                toast('Falha', 'error');
+                if (window.coplanReportError) {
+                  window.coplanReportError(
+                    'Excluir obra ' + cod, 'delete_obras', r);
+                }
+              }
               if (typeof window.coplanLoadObras === 'function') {
                 window.coplanLoadObras();
               }
@@ -18453,6 +18642,17 @@ COPLAN_BRIDGE_JS = """
       var msg = ok + ' salva(s)' + (falhas.length
         ? ' / ' + falhas.length + ' falha(s)' : '');
       toast(msg, lvl);
+      if (falhas.length && window.coplanReportError) {
+        window.coplanReportError(
+          'Salvar projeto (lote)', 'save_obra',
+          {
+            ok: false,
+            falhas: falhas.map(function (f) {
+              return 'COD=' + (f.cod || '?') + ': ' + f.error;
+            }),
+            falhas_total: falhas.length,
+          });
+      }
       if (typeof window.coplanLoadObras === 'function') {
         window.coplanLoadObras();
       }
@@ -22381,10 +22581,21 @@ COPLAN_BRIDGE_JS = """
                   + (res.total || res.imported || 0) + ')',
                   res.errors && res.errors.length ? 'warn' : 'info');
               }
+              // Mesmo com ok=true, mostra modal se houver erros/duplicadas
+              if (window.coplanReportError
+                  && ((res.errors && res.errors.length)
+                      || (res.duplicadas && res.duplicadas.length))) {
+                window.coplanReportError(
+                  'Importacao Excel', 'import_excel', res);
+              }
               if (typeof reloadEverything === 'function') reloadEverything();
             } else if (res.error && res.error !== 'cancelado'
                        && typeof window.coplanToast === 'function') {
               window.coplanToast('Falha: ' + res.error, 'error');
+              if (window.coplanReportError) {
+                window.coplanReportError(
+                  'Importacao Excel', 'import_excel', res);
+              }
             }
           };
           if (r.need_user_action && r.duplicadas_count) {
@@ -23397,9 +23608,38 @@ COPLAN_BRIDGE_JS = """
           } else {
             var msg = (r && r.error) ? r.error : C.MSG.aviso.nenhum_valor_unitario;
             C.toast(msg, 'warn');
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Calcular Valor (Cadastro)', 'calcular_valor_obra',
+                {
+                  ok: false,
+                  error: r && r.error,
+                  chaves_inexistentes: (r && r.chaves_inexistentes) || [],
+                  falhas: ((r && r.motivos_falha) || []).map(String),
+                  falhas_total: ((r && r.motivos_falha) || []).length,
+                });
+            }
+          }
+          // Sucesso com chaves inexistentes -> tambem mostra modal.
+          if (r && r.ok && window.coplanReportError
+              && ((r.chaves_inexistentes && r.chaves_inexistentes.length)
+                  || (r.motivos_falha && r.motivos_falha.length))) {
+            window.coplanReportError(
+              'Calcular Valor (Cadastro)', 'calcular_valor_obra',
+              {
+                ok: true,
+                chaves_inexistentes: r.chaves_inexistentes || [],
+                falhas: (r.motivos_falha || []).map(String),
+                falhas_total: (r.motivos_falha || []).length,
+              });
           }
         }).catch(function (err) {
           C.toast(C.MSG.erro.calc_valor + (err && err.message || err), 'error');
+          if (window.coplanReportError) {
+            window.coplanReportError(
+              'Calcular Valor (Cadastro)', 'calcular_valor_obra',
+              { ok: false, error: String(err && err.message || err) });
+          }
         });
       };
       if (a.resolver_pi_base && pi) {
@@ -23791,6 +24031,10 @@ COPLAN_BRIDGE_JS = """
           });
         }
         C.toast(C.MSG.erro.salvar + (err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Salvar Obra (Cadastro)', 'save_obra', resp);
+        }
         return false;
       })
       .catch(function (err) {
@@ -23799,6 +24043,11 @@ COPLAN_BRIDGE_JS = """
         if (msg === 'faltantes') return false;
         console.warn('[coplan/cadastro] tentarSalvar erro:', err);
         C.toast(C.MSG.erro.salvar + (msg || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Salvar Obra (Cadastro)', 'save_obra',
+            { ok: false, error: String(msg || err || '?') });
+        }
         return false;
       });
   }
@@ -27017,6 +27266,44 @@ COPLAN_BRIDGE_JS = """
     return (falhas > 0 || inex > 0) ? 'warn' : 'info';
   }
 
+  // Critério de "houve erro" = qualquer coisa diferente de sucesso pleno:
+  // !ok, ou falhas_total>0, ou chaves_inexistentes nao vazio, ou cancelled.
+  function hasErrors(r) {
+    if (!r) return true;
+    if (!r.ok) return true;
+    if (r.cancelled) return true;
+    if ((r.falhas_total || 0) > 0) return true;
+    if ((r.chaves_inexistentes || []).length > 0) return true;
+    return false;
+  }
+
+  function showDetailsModal(r, n) {
+    if (typeof window.coplanShowErrorDetails !== 'function') return;
+    var sections = [];
+    if (r && r.falhas && r.falhas.length) {
+      sections.push({
+        label: 'Falhas (' + (r.falhas_total || r.falhas.length) + ')',
+        lines: r.falhas.slice(),
+      });
+    }
+    if (r && r.chaves_inexistentes && r.chaves_inexistentes.length) {
+      sections.push({
+        label: 'Chaves inexistentes (' + r.chaves_inexistentes.length + ')',
+        lines: r.chaves_inexistentes.slice(),
+      });
+    }
+    if (r && r.error) {
+      sections.push({ label: 'Erro', lines: [String(r.error)] });
+    }
+    window.coplanShowErrorDetails({
+      title: 'Atualizar valor_obra ('
+        + (n != null ? n + ' obra(s) selecionada(s)' : 'lote') + ')',
+      summary: summarize(r),
+      sections: sections,
+      op: 'atualizar',
+    });
+  }
+
   window.coplanAtualizarBulk = function (cods) {
     var api = window.pywebview && window.pywebview.api;
     if (!api || !api.atualizar_obras_valores) {
@@ -27034,11 +27321,14 @@ COPLAN_BRIDGE_JS = """
       // Fallback sync: aviso porque pode travar com muitas obras.
       toast(label, 'info');
       api.atualizar_obras_valores(cods).then(function (r) {
-        if (r && r.cancelled) return toast('Cancelado', 'warn');
-        if (!r || !r.ok) {
-          return toast('Falhou: ' + (r && r.error || '?'), 'error');
+        if (r && r.cancelled) {
+          toast('Cancelado', 'warn');
+        } else if (!r || !r.ok) {
+          toast('Falhou: ' + (r && r.error || '?'), 'error');
+        } else {
+          toast(summarize(r), level(r));
         }
-        toast(summarize(r), level(r));
+        if (hasErrors(r)) showDetailsModal(r, n);
         if (typeof window.coplanLoadObras === 'function') {
           window.coplanLoadObras();
         }
@@ -27048,6 +27338,7 @@ COPLAN_BRIDGE_JS = """
 
     // Async: abre progress modal e dispara worker; polling cuida do resto.
     window.coplanProgress.start(label, function (result, errStr, cancelled) {
+      var done = false;
       if (cancelled || (result && result.cancelled)) {
         toast(
           'Cancelado'
@@ -27055,17 +27346,22 @@ COPLAN_BRIDGE_JS = """
                 + ' ja atualizada(s))' : ''),
           'warn'
         );
-        if (typeof window.coplanLoadObras === 'function') {
-          window.coplanLoadObras();
-        }
-        return;
+      } else if (errStr) {
+        toast('Falhou: ' + errStr, 'error');
+        // Sintetiza result minimo para o modal
+        if (!result) result = { ok: false, error: errStr };
+      } else if (!result || !result.ok) {
+        toast('Falhou: ' + ((result && result.error) || '?'), 'error');
+      } else {
+        toast(summarize(result), level(result));
+        done = true;
       }
-      if (errStr) return toast('Falhou: ' + errStr, 'error');
-      if (!result || !result.ok) {
-        return toast(
-          'Falhou: ' + ((result && result.error) || '?'), 'error');
-      }
-      toast(summarize(result), level(result));
+      // Modal de detalhes quando nao foi pleno sucesso
+      if (!done && hasErrors(result)) showDetailsModal(result, n);
+      // [chaves inexistentes] Mesmo com ok=true, se houver chaves
+      // inexistentes ou falhas, abre modal -- esse era exatamente o
+      // caso que o usuario nao tinha como ver.
+      else if (done && hasErrors(result)) showDetailsModal(result, n);
       if (typeof window.coplanLoadObras === 'function') {
         window.coplanLoadObras();
       }
@@ -28132,6 +28428,302 @@ COPLAN_BRIDGE_JS = """
   } else {
     init();
   }
+})();
+</script>
+<script>
+// ============================================================
+// coplanShowErrorDetails (2026-05-13): modal de detalhes pos-operacao
+//
+// Substitui o toast resumido quando uma operacao termina com
+// falhas/chaves_inexistentes/errors. Mostra a lista completa
+// para o usuario poder ver QUAL chave ou COD falhou, e salvar
+// em TXT.
+//
+// Uso:
+//   window.coplanShowErrorDetails({
+//     title: 'Atualizar obras',
+//     summary: '10 atualizadas / 3 falhas / 2 chaves inexistentes',
+//     sections: [
+//       { label: 'Falhas (3)',
+//         lines: ['COD=123: motivo', 'COD=456: motivo'] },
+//       { label: 'Chaves inexistentes (2)',
+//         lines: ['ALIM-NORTE-15', 'XYZ-SUL-25'] }
+//     ],
+//     op: 'atualizar',  // slug pro filename do TXT
+//   });
+//
+// Botões do modal:
+//   - Copiar tudo (clipboard)
+//   - Salvar TXT... (api.save_log_txt -> SAVE dialog)
+//   - Abrir pasta de logs (api.open_logs_folder)
+//   - Fechar
+// ============================================================
+(function () {
+  if (window.coplanShowErrorDetails) return;
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+  function toast(msg, type) {
+    if (typeof window.coplanToast === 'function') {
+      return window.coplanToast(msg, type);
+    }
+    var t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.className = 'toast ' + (type || 'info') + ' show';
+    setTimeout(function () { t.className = 'toast'; }, 2400);
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function ts() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-'
+      + pad2(d.getDate()) + '_' + pad2(d.getHours()) + '-'
+      + pad2(d.getMinutes()) + '-' + pad2(d.getSeconds());
+  }
+
+  function buildText(opts) {
+    var lines = [];
+    lines.push('=' + Array(60).join('='));
+    lines.push(opts.title || 'Operacao');
+    lines.push('Data/hora: ' + new Date().toISOString());
+    if (opts.summary) lines.push('Resumo: ' + opts.summary);
+    lines.push('=' + Array(60).join('='));
+    lines.push('');
+    (opts.sections || []).forEach(function (s) {
+      if (!s || !s.lines || !s.lines.length) return;
+      lines.push('-- ' + (s.label || 'Itens') + ' --');
+      s.lines.forEach(function (l) { lines.push(String(l)); });
+      lines.push('');
+    });
+    return lines.join('\n');
+  }
+
+  function close(modal) {
+    if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
+    document.removeEventListener('keydown', escClose, true);
+  }
+  var __activeModal = null;
+  function escClose(e) {
+    if (e.key === 'Escape' && __activeModal) {
+      e.stopPropagation();
+      close(__activeModal);
+      __activeModal = null;
+    }
+  }
+
+  window.coplanShowErrorDetails = function (opts) {
+    opts = opts || {};
+    var title = String(opts.title || 'Detalhes da operacao');
+    var summary = String(opts.summary || '');
+    var sections = Array.isArray(opts.sections) ? opts.sections : [];
+    var op = String(opts.op || 'log').replace(/[^a-z0-9_-]+/gi, '_');
+    var fullText = buildText({
+      title: title, summary: summary, sections: sections,
+    });
+
+    // Limpa modal anterior se houver
+    if (__activeModal) { close(__activeModal); __activeModal = null; }
+
+    var modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.style.cssText = 'display:grid;position:fixed;inset:0;'
+      + 'background:rgba(0,0,0,.45);z-index:300;place-items:center;';
+    var inner = document.createElement('div');
+    inner.className = 'modal lg';
+    inner.style.cssText = 'background:var(--surface, #fff);'
+      + 'border:1px solid var(--border, #e2e8f0);border-radius:8px;'
+      + 'box-shadow:0 12px 32px rgba(0,0,0,.22);max-width:720px;'
+      + 'width:90%;max-height:80vh;display:flex;flex-direction:column;';
+    modal.appendChild(inner);
+
+    var header = document.createElement('div');
+    header.className = 'modal-header';
+    header.style.cssText = 'padding:14px 18px;border-bottom:1px solid '
+      + 'var(--border);display:flex;align-items:center;'
+      + 'justify-content:space-between;gap:8px;';
+    header.innerHTML = '<div class="modal-title" style="font-weight:600;'
+      + 'font-size:14px;color:var(--text);">' + esc(title) + '</div>'
+      + '<button type="button" class="btn ghost btn-icon" data-close '
+      + 'style="background:none;border:0;cursor:pointer;font-size:18px;'
+      + 'line-height:1;color:var(--text-soft);">×</button>';
+    inner.appendChild(header);
+
+    var body = document.createElement('div');
+    body.className = 'modal-body';
+    body.style.cssText = 'padding:14px 18px;overflow-y:auto;'
+      + 'flex:1 1 auto;font-size:12.5px;color:var(--text);';
+    var summaryHtml = summary
+      ? '<div style="margin-bottom:12px;padding:8px 10px;'
+        + 'background:var(--surface-2);border-radius:6px;'
+        + 'font-weight:500;">' + esc(summary) + '</div>'
+      : '';
+    var sectionsHtml = '';
+    sections.forEach(function (s) {
+      if (!s || !s.lines || !s.lines.length) return;
+      sectionsHtml += '<div style="margin-bottom:14px;">'
+        + '<div style="font-weight:600;font-size:12px;'
+        + 'color:var(--text-soft);text-transform:uppercase;'
+        + 'letter-spacing:.04em;margin-bottom:4px;">'
+        + esc(s.label || 'Itens') + '</div>'
+        + '<pre style="background:var(--surface-2);'
+        + 'border:1px solid var(--border);border-radius:6px;'
+        + 'padding:8px 10px;max-height:240px;overflow:auto;'
+        + 'font-family:var(--font-mono, monospace);font-size:11.5px;'
+        + 'white-space:pre-wrap;margin:0;color:var(--text);">'
+        + s.lines.map(function (l) { return esc(l); }).join('\n')
+        + '</pre></div>';
+    });
+    if (!sectionsHtml) {
+      sectionsHtml = '<div style="padding:12px;color:var(--text-soft);'
+        + 'font-style:italic;">Sem detalhes adicionais.</div>';
+    }
+    body.innerHTML = summaryHtml + sectionsHtml;
+    inner.appendChild(body);
+
+    var footer = document.createElement('div');
+    footer.className = 'modal-footer';
+    footer.style.cssText = 'padding:12px 18px;border-top:1px solid '
+      + 'var(--border);display:flex;gap:8px;'
+      + 'justify-content:flex-end;flex-wrap:wrap;';
+    footer.innerHTML =
+      '<button type="button" class="btn ghost" data-act="copy">'
+        + 'Copiar tudo</button>'
+      + '<button type="button" class="btn ghost" data-act="folder">'
+        + 'Abrir pasta de logs</button>'
+      + '<button type="button" class="btn primary" data-act="save">'
+        + 'Salvar TXT...</button>'
+      + '<button type="button" class="btn" data-close>Fechar</button>';
+    inner.appendChild(footer);
+
+    document.body.appendChild(modal);
+    __activeModal = modal;
+    document.addEventListener('keydown', escClose, true);
+
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) {
+        close(modal); __activeModal = null;
+      }
+    });
+    modal.querySelectorAll('[data-close]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        close(modal); __activeModal = null;
+      });
+    });
+
+    var api = window.pywebview && window.pywebview.api;
+    footer.querySelector('[data-act="copy"]').addEventListener('click', function () {
+      var ok = false;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(fullText).then(function () {
+          toast('Conteudo copiado para a area de transferencia',
+                'info');
+        }).catch(function () { fallback(); });
+      } else {
+        fallback();
+      }
+      function fallback() {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = fullText;
+          ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select(); document.execCommand('copy');
+          document.body.removeChild(ta);
+          toast('Conteudo copiado', 'info');
+          ok = true;
+        } catch (e) {
+          toast('Falha ao copiar', 'error');
+        }
+      }
+    });
+    footer.querySelector('[data-act="folder"]').addEventListener('click', function () {
+      if (!(api && api.open_logs_folder)) {
+        return toast('API indisponivel', 'error');
+      }
+      api.open_logs_folder().then(function (r) {
+        if (r && r.ok) toast('Pasta: ' + r.path, 'info');
+        else toast('Falha: ' + (r && r.error || '?'), 'error');
+      });
+    });
+    footer.querySelector('[data-act="save"]').addEventListener('click', function () {
+      if (!(api && api.save_log_txt)) {
+        return toast('API indisponivel', 'error');
+      }
+      var defaultName = op + '_' + ts() + '.txt';
+      api.save_log_txt(fullText, defaultName).then(function (r) {
+        if (r && r.ok) {
+          toast('Log salvo: ' + r.path, 'info');
+        } else if (r && r.error === 'cancelado') {
+          // silencioso
+        } else {
+          toast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+      });
+    });
+  };
+
+  // Helper para call sites: monta seções a partir do shape do result
+  // (campos comuns: error, errors[], falhas[], chaves_inexistentes[],
+  // duplicadas[]) e abre o modal. Use depois de exibir o toast de
+  // erro. Mostra o modal SO quando ha de fato itens para mostrar.
+  window.coplanReportError = function (title, op, r, extra) {
+    if (typeof window.coplanShowErrorDetails !== 'function') return;
+    var sections = [];
+    if (r && r.error) {
+      sections.push({ label: 'Erro', lines: [String(r.error)] });
+    }
+    if (r && Array.isArray(r.errors) && r.errors.length) {
+      sections.push({
+        label: 'Erros (' + r.errors.length + ')',
+        lines: r.errors.slice(),
+      });
+    }
+    if (r && Array.isArray(r.falhas) && r.falhas.length) {
+      sections.push({
+        label: 'Falhas (' + (r.falhas_total || r.falhas.length) + ')',
+        lines: r.falhas.slice(),
+      });
+    }
+    if (r && Array.isArray(r.chaves_inexistentes)
+        && r.chaves_inexistentes.length) {
+      sections.push({
+        label: 'Chaves inexistentes (' + r.chaves_inexistentes.length + ')',
+        lines: r.chaves_inexistentes.slice(),
+      });
+    }
+    if (r && Array.isArray(r.duplicadas) && r.duplicadas.length) {
+      var dupLines = r.duplicadas.map(function (d) {
+        return 'linha ' + (d.linha || '?') + ' - COD excel='
+          + (d.cod_excel || '?') + ' / dup COD=' + (d.dup_cod || '?');
+      });
+      sections.push({
+        label: 'Duplicadas (' + r.duplicadas.length + ')',
+        lines: dupLines,
+      });
+    }
+    if (r && Array.isArray(r.missing_columns) && r.missing_columns.length) {
+      sections.push({
+        label: 'Colunas faltantes (' + r.missing_columns.length + ')',
+        lines: r.missing_columns.slice(),
+      });
+    }
+    if (extra) sections = sections.concat(extra);
+    if (!sections.length) {
+      // Nada para mostrar -- nao incomoda o usuario com modal vazio.
+      return;
+    }
+    window.coplanShowErrorDetails({
+      title: title,
+      summary: (r && (r.ok ? 'Operacao concluida com avisos'
+                            : 'Operacao nao concluida com sucesso')) || '',
+      sections: sections,
+      op: op || 'log',
+    });
+  };
 })();
 </script>
 """
