@@ -218,6 +218,125 @@ class CoplanApi:
                   file=sys.stderr)
 
     # ------------------------------------------------------------------
+    # _write_op_log: persiste um TXT em <HERE>/logs/<op>_<ts>.txt com os
+    # detalhes de uma operacao que NAO foi 100% bem-sucedida. Chamado
+    # antes de retornar o result dict de operacoes (atualizar, export,
+    # delete, etc.). Garante que o usuario sempre tem o arquivo mesmo
+    # se nao clicar em "Salvar TXT" no modal de detalhes.
+    #
+    # Devolve o path ('' em caso de falha de escrita). NUNCA levanta.
+    # ------------------------------------------------------------------
+    def _write_op_log(
+        self, op: str, result: dict[str, Any],
+        meta: dict[str, Any] | None = None,
+    ) -> str:
+        try:
+            logs_dir = HERE / "logs"
+            try:
+                logs_dir.mkdir(exist_ok=True)
+            except Exception:  # noqa: BLE001
+                pass
+            ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            op_slug = (op or "log").lower()
+            import re as _re_op
+            op_slug = _re_op.sub(r"[^a-z0-9_-]+", "_", op_slug)
+            fname = f"{op_slug}_{ts}.txt"
+            path = logs_dir / fname
+            lines: list[str] = []
+            sep = "=" * 60
+            lines.append(sep)
+            lines.append(f"Operacao: {op}")
+            lines.append(f"Data/hora: {datetime.now().isoformat()}")
+            if meta:
+                for k, v in meta.items():
+                    lines.append(f"{k}: {v}")
+            lines.append(sep)
+            lines.append("")
+            # Resumo dos contadores comuns.
+            counters = []
+            for k in ("ok", "total", "processadas_ok", "atualizadas",
+                     "falhas_total", "deleted", "imported", "merged",
+                     "skipped", "count", "blocked", "cancelled"):
+                if k in result:
+                    counters.append(f"{k}={result.get(k)}")
+            if counters:
+                lines.append("Contadores: " + " | ".join(counters))
+                lines.append("")
+            err = str(result.get("error") or "").strip()
+            if err:
+                lines.append("-- Erro --")
+                lines.append(err)
+                lines.append("")
+            errors = result.get("errors") or []
+            if errors:
+                lines.append(f"-- Erros ({len(errors)}) --")
+                for e in errors:
+                    lines.append(str(e))
+                lines.append("")
+            falhas = result.get("falhas") or []
+            if falhas:
+                lines.append(
+                    f"-- Falhas ({result.get('falhas_total', len(falhas))}) --"
+                )
+                for f in falhas:
+                    lines.append(str(f))
+                lines.append("")
+            chaves = result.get("chaves_inexistentes") or []
+            if chaves:
+                lines.append(f"-- Chaves inexistentes ({len(chaves)}) --")
+                for c in chaves:
+                    lines.append(str(c))
+                lines.append("")
+            duplicadas = result.get("duplicadas") or []
+            if duplicadas:
+                lines.append(f"-- Duplicadas ({len(duplicadas)}) --")
+                for d in duplicadas:
+                    if isinstance(d, dict):
+                        lines.append(
+                            f"linha {d.get('linha', '?')} - "
+                            f"COD excel={d.get('cod_excel', '?')} / "
+                            f"dup COD={d.get('dup_cod', '?')}"
+                        )
+                    else:
+                        lines.append(str(d))
+                lines.append("")
+            missing = result.get("missing_columns") or []
+            if missing:
+                lines.append(f"-- Colunas faltantes ({len(missing)}) --")
+                for c in missing:
+                    lines.append(str(c))
+                lines.append("")
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                fh.write("\n".join(lines))
+            print(f"[main_web] log salvo: {path}", file=sys.stderr)
+            return str(path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[main_web] _write_op_log falhou: {exc}",
+                  file=sys.stderr)
+            return ""
+
+    @staticmethod
+    def _result_has_errors(result: dict[str, Any]) -> bool:
+        """True se o result indica qualquer coisa diferente de sucesso
+        pleno: !ok, falhas_total>0, chaves_inexistentes nao vazio,
+        errors nao vazio, duplicadas nao vazio, cancelled."""
+        if not result:
+            return True
+        if not result.get("ok"):
+            return True
+        if result.get("cancelled"):
+            return True
+        if int(result.get("falhas_total") or 0) > 0:
+            return True
+        if (result.get("chaves_inexistentes") or []):
+            return True
+        if (result.get("errors") or []):
+            return True
+        if (result.get("duplicadas") or []):
+            return True
+        return False
+
+    # ------------------------------------------------------------------
     # Paridade desktop: mensagem amigavel quando o banco esta ocupado
     # por outro usuario / processo. Substitui str(exc) cru por uma
     # mensagem com user/maquina/desde lida do .lock ao lado do .db.
@@ -3413,6 +3532,15 @@ class CoplanApi:
             out["blocked"] = "db_busy"
         if cancelled:
             out["cancelled"] = True
+        # Auto-log em <HERE>/logs sempre que houver qualquer coisa
+        # diferente de sucesso pleno (chaves inexistentes incluso). O
+        # usuario nao depende do modal -- arquivo SEMPRE existe.
+        if self._result_has_errors(out):
+            out["log_path"] = self._write_op_log(
+                "atualizar", out,
+                meta={"cods_solicitados": len(cods_list) if cods_list
+                      else "todos"},
+            )
         return out
 
     def get_alimentador_details(self, alim: Any) -> dict[str, Any]:
@@ -27301,7 +27429,13 @@ COPLAN_BRIDGE_JS = """
       summary: summarize(r),
       sections: sections,
       op: 'atualizar',
+      logPath: (r && r.log_path) || '',
     });
+    // Toast adicional com o caminho do log -- garante que o usuario
+    // ve o path mesmo se fechar o modal antes de olhar.
+    if (r && r.log_path && typeof window.coplanToast === 'function') {
+      window.coplanToast('Log salvo: ' + r.log_path, 'info');
+    }
   }
 
   window.coplanAtualizarBulk = function (cods) {
@@ -28521,9 +28655,13 @@ COPLAN_BRIDGE_JS = """
     var summary = String(opts.summary || '');
     var sections = Array.isArray(opts.sections) ? opts.sections : [];
     var op = String(opts.op || 'log').replace(/[^a-z0-9_-]+/gi, '_');
+    var logPath = String(opts.logPath || '');
     var fullText = buildText({
       title: title, summary: summary, sections: sections,
     });
+    if (logPath) {
+      fullText = '# Log salvo em: ' + logPath + '\n\n' + fullText;
+    }
 
     // Limpa modal anterior se houver
     if (__activeModal) { close(__activeModal); __activeModal = null; }
@@ -28561,6 +28699,15 @@ COPLAN_BRIDGE_JS = """
         + 'background:var(--surface-2);border-radius:6px;'
         + 'font-weight:500;">' + esc(summary) + '</div>'
       : '';
+    var logPathHtml = logPath
+      ? '<div style="margin-bottom:12px;padding:8px 10px;'
+        + 'background:rgba(34,197,94,.08);border:1px solid '
+        + 'rgba(34,197,94,.35);border-radius:6px;font-size:11.5px;">'
+        + '<strong>Log salvo automaticamente em:</strong><br>'
+        + '<span style="font-family:var(--font-mono, monospace);'
+        + 'word-break:break-all;">' + esc(logPath) + '</span>'
+        + '</div>'
+      : '';
     var sectionsHtml = '';
     sections.forEach(function (s) {
       if (!s || !s.lines || !s.lines.length) return;
@@ -28581,7 +28728,7 @@ COPLAN_BRIDGE_JS = """
       sectionsHtml = '<div style="padding:12px;color:var(--text-soft);'
         + 'font-style:italic;">Sem detalhes adicionais.</div>';
     }
-    body.innerHTML = summaryHtml + sectionsHtml;
+    body.innerHTML = logPathHtml + summaryHtml + sectionsHtml;
     inner.appendChild(body);
 
     var footer = document.createElement('div');
@@ -28712,7 +28859,7 @@ COPLAN_BRIDGE_JS = """
       });
     }
     if (extra) sections = sections.concat(extra);
-    if (!sections.length) {
+    if (!sections.length && !(r && r.log_path)) {
       // Nada para mostrar -- nao incomoda o usuario com modal vazio.
       return;
     }
@@ -28722,6 +28869,7 @@ COPLAN_BRIDGE_JS = """
                             : 'Operacao nao concluida com sucesso')) || '',
       sections: sections,
       op: op || 'log',
+      logPath: (r && r.log_path) || '',
     });
   };
 })();
