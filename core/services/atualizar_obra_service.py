@@ -124,8 +124,14 @@ def extrair_obra_input(
     ``lambda pi: get_pi_base(pi, prompt_user=False)``, que e puro nessa
     chamada).
 
-    Quando ``pi_base`` existe mas vem vazia, faz fallback para
-    ``projeto_investimento`` (mesma regra do legado).
+    Quando ``pi_base`` existe mas vem vazia, RESOLVE via
+    ``pi_base_fallback_fn`` (mesma rota usada quando a coluna nao
+    existe). Antes, caia em ``projeto_investimento`` cru -- texto
+    longo tipo "INSTALACAO DE BANCOS DE CAPACITORES" -- que nao
+    casava com chave nenhuma na planilha MODULO, fazendo o calculo
+    falhar com "chave inexistente". O cadastro (calcular_valor_obra
+    RPC) sempre fez essa resolucao, criando uma divergencia entre
+    os dois caminhos.
     """
 
     def _at(col: str) -> str:
@@ -134,9 +140,15 @@ def extrair_obra_input(
     projeto_investimento = _at("projeto_investimento").strip().upper()
     if "pi_base" in cols:
         pi_base_raw = _at("pi_base").strip().upper()
-        pi_base = pi_base_raw or projeto_investimento
     else:
-        pi_base = pi_base_fallback_fn(projeto_investimento).strip().upper()
+        pi_base_raw = ""
+    if pi_base_raw:
+        pi_base = pi_base_raw
+    else:
+        pi_base = (
+            pi_base_fallback_fn(projeto_investimento).strip().upper()
+            or projeto_investimento
+        )
 
     nivel_tensao = _at("nivel_tensao_obra").strip().replace(",", ".").upper()
 
