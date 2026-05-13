@@ -124,17 +124,14 @@ def extrair_obra_input(
     ``lambda pi: get_pi_base(pi, prompt_user=False)``, que e puro nessa
     chamada).
 
-    Quando ``pi_base`` existe mas vem com o TEXTO LONGO (igual ao
-    ``projeto_investimento``) -- caso comum em DBs antigos onde o
-    pi_base nunca foi resolvido para o tipo_base curto --, RESOLVE
-    via ``pi_base_fallback_fn``. Antes, caia em ``pi_base_raw`` cru
-    (texto longo) -> chave do MODULO inexistente -> Atualizar falhava
-    com "chave inexistente" enquanto o Cadastro/Calcular funcionava
-    (porque o cadastro sempre chama resolver_pi_base antes).
-
-    ``pi_base_fallback_fn`` deve ser idempotente em codigos ja curtos:
-    ``get_pi_base("BRT", prompt_user=False)`` devolve ``"BRT"``. Logo,
-    aplicar sempre o fallback nao quebra obras com pi_base ja correto.
+    Quando ``pi_base`` existe mas vem vazia, RESOLVE via
+    ``pi_base_fallback_fn`` (mesma rota usada quando a coluna nao
+    existe). Antes, caia em ``projeto_investimento`` cru -- texto
+    longo tipo "INSTALACAO DE BANCOS DE CAPACITORES" -- que nao
+    casava com chave nenhuma na planilha MODULO, fazendo o calculo
+    falhar com "chave inexistente". O cadastro (calcular_valor_obra
+    RPC) sempre fez essa resolucao, criando uma divergencia entre
+    os dois caminhos.
     """
 
     def _at(col: str) -> str:
@@ -145,13 +142,13 @@ def extrair_obra_input(
         pi_base_raw = _at("pi_base").strip().upper()
     else:
         pi_base_raw = ""
-    # Sempre passa pelo fallback. Idempotente em codigos curtos.
-    candidate = pi_base_raw or projeto_investimento
-    try:
-        resolved = pi_base_fallback_fn(candidate).strip().upper()
-    except Exception:  # noqa: BLE001
-        resolved = ""
-    pi_base = resolved or candidate or projeto_investimento
+    if pi_base_raw:
+        pi_base = pi_base_raw
+    else:
+        pi_base = (
+            pi_base_fallback_fn(projeto_investimento).strip().upper()
+            or projeto_investimento
+        )
 
     nivel_tensao = _at("nivel_tensao_obra").strip().replace(",", ".").upper()
 
