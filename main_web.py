@@ -313,6 +313,36 @@ class CoplanApi:
                 for d in diag:
                     lines.append(str(d))
                 lines.append("")
+            diag_all_l = result.get("diagnostico_todas") or []
+            if diag_all_l:
+                lines.append(
+                    f"-- Breakdown por obra ({len(diag_all_l)}) --"
+                )
+                lines.append(
+                    "Para CADA obra processada (sucesso ou falha): "
+                    "inputs, chave montada, extras resolvidos, valor "
+                    "calculado. Compare 'extras_resolvidos' com o que o "
+                    "Cadastro/Calcular usou para detectar key mismatch "
+                    "no last_pi_extra_map."
+                )
+                for d in diag_all_l:
+                    lines.append(str(d))
+                lines.append("")
+            extra_map_snap = result.get("last_pi_extra_map") or {}
+            if extra_map_snap:
+                lines.append(
+                    f"-- Snapshot last_pi_extra_map ({len(extra_map_snap)} chaves) --"
+                )
+                lines.append(
+                    "Conteudo de cfg['last_pi_extra_map'] no momento "
+                    "do Atualizar. Compare a chave deste PI com o "
+                    "pi_base que aparece no Breakdown acima -- se nao "
+                    "for IDENTICA (case-sensitive, acentuacao), o "
+                    "lookup falha e os extras manuais nao sao aplicados."
+                )
+                for k in sorted(extra_map_snap.keys()):
+                    lines.append(f"  {k!r} -> {extra_map_snap[k]!r}")
+                lines.append("")
             duplicadas = result.get("duplicadas") or []
             if duplicadas:
                 lines.append(f"-- Duplicadas ({len(duplicadas)}) --")
@@ -3444,6 +3474,14 @@ class CoplanApi:
                 extracao_falhas.append(msg)
                 print(f"[main_web] {msg}", file=sys.stderr)
 
+        # Snapshot do last_pi_extra_map para o log -- ajuda a detectar
+        # key mismatch entre o que o Cadastro/Configuracoes salvou e o
+        # que o Atualizar consulta.
+        try:
+            _pi_extra_map_snapshot = dict(cfg.get("last_pi_extra_map", {}) or {})
+        except Exception:  # noqa: BLE001
+            _pi_extra_map_snapshot = {}
+
         def _pi_extras(pi: str) -> list[str]:
             try:
                 return list(obter_modulos_extras(pi, cfg) or [])
@@ -3465,6 +3503,7 @@ class CoplanApi:
         falhas: list[str] = []
         chaves_inex: set[str] = set()
         diag_failed: list[str] = []  # diagnostico por obra que falhou
+        diag_all: list[str] = []  # breakdown completo por obra (success+fail)
         cancelled = False
         if _emit(0, max(total_calc, 1),
                  f"Calculando valor de {total_calc} obra(s)..."):
@@ -3500,6 +3539,22 @@ class CoplanApi:
                         f"qtd={inp.quantidade_material!r}"
                     )
                     continue
+                # Diagnostico completo (todas obras): inputs + chave +
+                # extras + valor_obra_formatado. Permite comparar com o
+                # que o Cadastro/Calcular usou e identificar divergencias.
+                diag_all.append(
+                    f"COD={inp.cod or 'N/D'} "
+                    f"chave={result.chave_completa or '(falhou)'} "
+                    f"extras_resolvidos={list(extras)} "
+                    f"valor_calc={result.valor_obra_formatado or '(falhou)'} "
+                    f"sucesso_base={result.sucesso_base} "
+                    f"pi_base={inp.pi_base!r} "
+                    f"projeto={inp.projeto_investimento!r} "
+                    f"nivel_tensao={inp.nivel_tensao!r} "
+                    f"carac={inp.caracteristicas_material!r} "
+                    f"regional={inp.nome_regional!r} "
+                    f"qtd={inp.quantidade_material!r}"
+                )
                 results.append(result)
                 if result.sucesso_base:
                     processadas_ok += 1
@@ -3642,15 +3697,18 @@ class CoplanApi:
             "falhas": falhas_full,
             "chaves_inexistentes": sorted(chaves_inex),
             "diagnostico": diag_failed,
+            "diagnostico_todas": diag_all,
+            "last_pi_extra_map": _pi_extra_map_snapshot,
         }
         if busy_msg:
             out["blocked"] = "db_busy"
         if cancelled:
             out["cancelled"] = True
-        # Auto-log em <HERE>/logs sempre que houver qualquer coisa
-        # diferente de sucesso pleno (chaves inexistentes / preservadas
-        # incluso). O usuario nao depende do modal -- arquivo SEMPRE existe.
-        if self._result_has_errors(out) or preservadas > 0:
+        # Auto-log em <HERE>/logs SEMPRE que processar 1+ obra (sucesso
+        # ou erro). Mesmo "1 atualizada(s)" pode estar com valor errado
+        # se algum extra nao foi resolvido -- o breakdown do log mostra
+        # exatamente quais extras foram aplicados para CADA obra.
+        if len(inputs) > 0 or self._result_has_errors(out) or preservadas > 0:
             out["log_path"] = self._write_op_log(
                 "atualizar", out,
                 meta={
