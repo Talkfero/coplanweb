@@ -287,6 +287,32 @@ class CoplanApi:
                 for c in chaves:
                     lines.append(str(c))
                 lines.append("")
+            preservadas_msgs = result.get("preservadas_msgs") or []
+            if preservadas_msgs:
+                lines.append(
+                    f"-- Valores preservados ({len(preservadas_msgs)}) --"
+                )
+                lines.append(
+                    "Obras com calculo parcial (chave extra ausente ou "
+                    "sem valor) que JA TINHAM valor no banco: o valor "
+                    "antigo foi mantido."
+                )
+                for m in preservadas_msgs:
+                    lines.append(str(m))
+                lines.append("")
+            diag = result.get("diagnostico") or []
+            if diag:
+                lines.append(
+                    f"-- Diagnostico por obra falha ({len(diag)}) --"
+                )
+                lines.append(
+                    "Listing input values + chave tentada para CADA obra "
+                    "que falhou. Use isto para comparar com o calculo "
+                    "feito na aba Cadastro (botao Calcular)."
+                )
+                for d in diag:
+                    lines.append(str(d))
+                lines.append("")
             duplicadas = result.get("duplicadas") or []
             if duplicadas:
                 lines.append(f"-- Duplicadas ({len(duplicadas)}) --")
@@ -3399,7 +3425,14 @@ class CoplanApi:
                 return pi
 
         inputs: list[Any] = []
+        extracao_falhas: list[str] = []
+        cod_idx = cols.index("cod") if "cod" in cols else -1
         for r in rows:
+            row_cod = ""
+            try:
+                row_cod = str(r[cod_idx]) if cod_idx >= 0 else ""
+            except Exception:  # noqa: BLE001
+                row_cod = ""
             try:
                 inp = extrair_obra_input(
                     r, cols, pi_base_fallback_fn=_pi_base_fallback,
@@ -3407,8 +3440,9 @@ class CoplanApi:
                 inputs.append(inp)
             except Exception as exc:  # noqa: BLE001
                 # Erro de extracao -- nao bloqueia; conta como falha.
-                print(f"[main_web] extrair_obra_input cod={r}: {exc}",
-                      file=sys.stderr)
+                msg = f"COD={row_cod or 'N/D'}: extrair_obra_input: {exc}"
+                extracao_falhas.append(msg)
+                print(f"[main_web] {msg}", file=sys.stderr)
 
         def _pi_extras(pi: str) -> list[str]:
             try:
@@ -3419,12 +3453,18 @@ class CoplanApi:
         # Fase 1 (calculo): loop equivalente a processar_atualizacao, mas
         # com hooks de progresso/cancel por obra. Reproduz a mesma
         # contabilidade (falhas_max=5, set de chaves_inexistentes).
+        # Fase 1 (calculo): loop equivalente a processar_atualizacao, mas
+        # com hooks de progresso/cancel por obra. Reproduz a mesma
+        # contabilidade (falhas_max=5, set de chaves_inexistentes).
+        # Tambem coleta diagnostico por obra para o log (input values +
+        # chave tentada) -- ajuda a entender por que uma obra falhou.
         total_calc = len(inputs)
         results: list[Any] = []
         processadas_ok = 0
         falhas_total = 0
         falhas: list[str] = []
         chaves_inex: set[str] = set()
+        diag_failed: list[str] = []  # diagnostico por obra que falhou
         cancelled = False
         if _emit(0, max(total_calc, 1),
                  f"Calculando valor de {total_calc} obra(s)..."):
@@ -3450,10 +3490,34 @@ class CoplanApi:
                     falhas_total += 1
                     if len(falhas) < 5:
                         falhas.append(f"COD={inp.cod or 'N/D'}: {exc}")
+                    diag_failed.append(
+                        f"COD={inp.cod or 'N/D'} EXC={exc} "
+                        f"pi_base={inp.pi_base!r} "
+                        f"projeto={inp.projeto_investimento!r} "
+                        f"nivel_tensao={inp.nivel_tensao!r} "
+                        f"carac={inp.caracteristicas_material!r} "
+                        f"regional={inp.nome_regional!r} "
+                        f"qtd={inp.quantidade_material!r}"
+                    )
                     continue
                 results.append(result)
                 if result.sucesso_base:
                     processadas_ok += 1
+                else:
+                    # Falha bloqueante (regional/chave/qtd invalida etc.):
+                    # registra diagnostico completo para o log.
+                    diag_failed.append(
+                        f"COD={inp.cod or 'N/D'} "
+                        f"chave_tentada={result.chave_completa or '(nao montou)'} "
+                        f"motivos={list(result.motivos_falha)} "
+                        f"pi_base={inp.pi_base!r} "
+                        f"projeto={inp.projeto_investimento!r} "
+                        f"nivel_tensao={inp.nivel_tensao!r} "
+                        f"carac={inp.caracteristicas_material!r} "
+                        f"regional={inp.nome_regional!r} "
+                        f"qtd={inp.quantidade_material!r} "
+                        f"extras={list(extras)}"
+                    )
                 for motivo in result.motivos_falha:
                     falhas_total += 1
                     if len(falhas) < 5:
@@ -3475,8 +3539,18 @@ class CoplanApi:
             r for r in results
             if r.sucesso_base and r.valor_obra_formatado and str(r.cod or "").strip()
         ]
+        # Index inputs por COD para conseguir ler o valor_obra atual
+        # do banco antes de decidir sobrescrever (regra de preservacao
+        # abaixo).
+        input_by_cod = {}
+        for _inp in inputs:
+            _c = str(getattr(_inp, "cod", "") or "").strip()
+            if _c:
+                input_by_cod[_c] = _inp
         total_write = len(to_write)
         atualizadas = 0
+        preservadas = 0
+        preservadas_msgs: list[str] = []
         update_falhas: list[str] = []
         busy_msg = ""
         if not cancelled and total_write > 0:
@@ -3486,6 +3560,43 @@ class CoplanApi:
         if not cancelled:
             for i, r_obra in enumerate(to_write, 1):
                 cod_s = str(r_obra.cod or "").strip()
+
+                # Regra de preservacao: se a calculo teve motivos_falha
+                # (chave extra ausente OU valor invalido em alguma extra)
+                # e a obra ja tem valor_obra gravado no DB, NAO sobrescreve
+                # com o calculo parcial. Loga preservacao. Quando obra NAO
+                # tem valor_obra, segue update normal (nao ha o que perder).
+                motivos_problema = list(r_obra.motivos_falha or [])
+                if motivos_problema:
+                    inp_cur = input_by_cod.get(cod_s)
+                    existing_val = ""
+                    if inp_cur is not None:
+                        try:
+                            existing_val = str(
+                                inp_cur.obra_data_map.get("valor_obra", "")
+                                or ""
+                            ).strip()
+                        except Exception:  # noqa: BLE001
+                            existing_val = ""
+                    if existing_val:
+                        msg = (
+                            f"COD={cod_s}: valor preservado "
+                            f"(DB={existing_val}, calc_parcial="
+                            f"{r_obra.valor_obra_formatado}) - motivos: "
+                            f"{'; '.join(motivos_problema)}"
+                        )
+                        preservadas += 1
+                        preservadas_msgs.append(msg)
+                        print(f"[main_web] {msg}", file=sys.stderr)
+                        if (i % 5) == 0 or i == total_write:
+                            if _emit(
+                                i, total_write,
+                                f"Salvando... ({i}/{total_write})",
+                            ):
+                                cancelled = True
+                                break
+                        continue
+
                 try:
                     db.update_obra(
                         {"valor_obra": r_obra.valor_obra_formatado},
@@ -3516,7 +3627,8 @@ class CoplanApi:
                         cancelled = True
                         break
 
-        falhas_full = list(falhas) + update_falhas
+        falhas_full = list(falhas) + update_falhas + extracao_falhas
+        falhas_total += len(extracao_falhas)
         ok_flag = not busy_msg and not cancelled
         err_str = busy_msg or ("cancelado" if cancelled else "")
         out: dict[str, Any] = {
@@ -3524,22 +3636,28 @@ class CoplanApi:
             "total": len(inputs),
             "processadas_ok": processadas_ok,
             "atualizadas": atualizadas,
+            "preservadas": preservadas,
+            "preservadas_msgs": preservadas_msgs,
             "falhas_total": falhas_total + len(update_falhas),
             "falhas": falhas_full,
             "chaves_inexistentes": sorted(chaves_inex),
+            "diagnostico": diag_failed,
         }
         if busy_msg:
             out["blocked"] = "db_busy"
         if cancelled:
             out["cancelled"] = True
         # Auto-log em <HERE>/logs sempre que houver qualquer coisa
-        # diferente de sucesso pleno (chaves inexistentes incluso). O
-        # usuario nao depende do modal -- arquivo SEMPRE existe.
-        if self._result_has_errors(out):
+        # diferente de sucesso pleno (chaves inexistentes / preservadas
+        # incluso). O usuario nao depende do modal -- arquivo SEMPRE existe.
+        if self._result_has_errors(out) or preservadas > 0:
             out["log_path"] = self._write_op_log(
                 "atualizar", out,
-                meta={"cods_solicitados": len(cods_list) if cods_list
-                      else "todos"},
+                meta={
+                    "cods_solicitados": (len(cods_list) if cods_list
+                                         else "todos"),
+                    "preservadas": preservadas,
+                },
             )
         return out
 
@@ -27381,7 +27499,9 @@ COPLAN_BRIDGE_JS = """
     if (!r) return 'Falha desconhecida';
     var falhas = r.falhas_total || 0;
     var inex = (r.chaves_inexistentes || []).length;
+    var preserv = r.preservadas || 0;
     var partes = [(r.atualizadas || 0) + ' atualizada(s)'];
+    if (preserv > 0) partes.push(preserv + ' preservada(s)');
     if (falhas > 0) partes.push(falhas + ' falha(s)');
     if (inex > 0) partes.push(inex + ' chave(s) inexistente(s)');
     return partes.join(' / ');
@@ -27402,6 +27522,7 @@ COPLAN_BRIDGE_JS = """
     if (r.cancelled) return true;
     if ((r.falhas_total || 0) > 0) return true;
     if ((r.chaves_inexistentes || []).length > 0) return true;
+    if ((r.preservadas || 0) > 0) return true;
     return false;
   }
 
@@ -27418,6 +27539,12 @@ COPLAN_BRIDGE_JS = """
       sections.push({
         label: 'Chaves inexistentes (' + r.chaves_inexistentes.length + ')',
         lines: r.chaves_inexistentes.slice(),
+      });
+    }
+    if (r && r.preservadas_msgs && r.preservadas_msgs.length) {
+      sections.push({
+        label: 'Valores preservados (' + r.preservadas_msgs.length + ')',
+        lines: r.preservadas_msgs.slice(),
       });
     }
     if (r && r.error) {
