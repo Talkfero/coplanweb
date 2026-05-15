@@ -1902,6 +1902,22 @@ class DatabaseManager:
             return None
 
     def build_merge_updates(self, existing: dict, incoming: dict) -> dict:
+        """Constroi dict de updates para merge na importacao Excel.
+
+        Regra (apos correcao 2026-05-13): para CADA coluna do incoming
+        com valor nao-vazio, sobrescreve o valor existente se for
+        diferente. Antes, colunas ja preenchidas eram preservadas
+        (so blanks eram completados). O usuario relatou que isto
+        impedia atualizar planilhas com correcoes em colunas ja
+        populadas -- agora merge atualiza tambem campos preenchidos.
+
+        Campos especiais mantem regras proprias:
+        - cod, data_criacao, criado_por: nunca atualiza.
+        - descricao_obra: se diferente, anexa em observacoes_gerais
+          como "Descricao adicional: ..." (logica abaixo).
+        - empresa, cod_pep: normaliza antes de comparar.
+        - GANHOS_NUMERIC_FIELDS: compara como numero.
+        """
         cols = self.get_column_names()
         updates: dict[str, Any] = {}
         for col in cols:
@@ -1937,8 +1953,18 @@ class DatabaseManager:
                     updates[col] = self._normalize_decimal(new_val)
                 continue
 
-            if self._is_missing(existing.get(col)):
-                updates[col] = self._normalize_decimal(new_val)
+            # Caso generico: atualiza se o novo valor difere do existente
+            # (case-sensitive, sem normalizar). Antes, so atualizava
+            # colunas vazias -- regra invertida para permitir corrigir
+            # dados via re-importacao do Excel.
+            new_normalized = self._normalize_decimal(new_val)
+            existing_val = existing.get(col)
+            if self._is_missing(existing_val):
+                updates[col] = new_normalized
+            else:
+                existing_normalized = self._normalize_decimal(existing_val)
+                if str(existing_normalized) != str(new_normalized):
+                    updates[col] = new_normalized
 
         desc_new = str(incoming.get("descricao_obra") or "").strip()
         desc_existing = str(existing.get("descricao_obra") or "").strip()
