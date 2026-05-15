@@ -22113,9 +22113,17 @@ COPLAN_BRIDGE_JS = """
 <script>
 (function () {
   // ---- Section 6 / Passo 7.3 (Config / Templates + PI_BASE) ----
-  // Wires no #modal-pi do mock: lista PI_BASE_CUSTOM existentes,
-  // botao Adicionar e Excluir por linha. Sidebar "Gerenciar PI_BASE"
-  // (sb-item btn-modal-pi) ja abre o modal pelo handler do mock.
+  // DESABILITADO: este renderer alvejava um seletor DOM legado
+  // (box.querySelectorAll('div')[1]) que nao corresponde a estrutura
+  // atual (<ul id="pi-list">), e o doAdd local concorria com o M080
+  // dobrando o handler do botao Adicionar (gerava window.prompt
+  // duplicado). Toda a logica de listar/adicionar/remover PI_BASE
+  // ficou no bloco M080 (procure por "Modal Gerenciar PI_BASE" neste
+  // arquivo). Mantenho o IIFE so para nao quebrar referencias antigas
+  // a window.coplanRenderPiList/window.coplanLoadPiList -- redirecio
+  // estes para o equivalente do M080 (registrado abaixo do M080).
+  return;
+  // eslint-disable-next-line no-unreachable
   function esc(s) {
     return String(s == null ? '' : s).replace(/[<>&"']/g, function (c) {
       return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c];
@@ -23599,6 +23607,97 @@ COPLAN_BRIDGE_JS = """
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // ---- pickPiBase: replica QInputDialog.getItem do desktop (pi_base.py).
+  // Abre dialogo com <select> populado por list_pi_base_custom().all
+  // + opcao "+ Criar novo PI_BASE...". Se o user criar novo, persiste
+  // via add_pi_base_custom. Resolve com string (base escolhida) ou null
+  // (cancelado).
+  function pickPiBase(pi, sugestao) {
+    var a = api();
+    if (!a || typeof window.coplanOpenDialog !== 'function'
+        || !a.list_pi_base_custom) {
+      var raw = window.prompt(
+        'PI "' + pi + '" nao tem PI_BASE conhecido.\nInforme o PI_BASE base:',
+        sugestao || ''
+      );
+      if (raw == null) return Promise.resolve(null);
+      var t = String(raw).trim();
+      return Promise.resolve(t || null);
+    }
+    return a.list_pi_base_custom().then(function (st) {
+      var all = (st && st.ok && Array.isArray(st.all)) ? st.all.slice() : [];
+      var CRIAR = '+ Criar novo PI_BASE...';
+      var opts = all.slice();
+      opts.push(CRIAR);
+      var sel = sugestao && all.indexOf(sugestao) >= 0 ? sugestao : all[0];
+      var html = '<div style="padding:14px 18px;line-height:1.5">'
+        + '<p>O PI <strong>' + escapeHtml(pi) + '</strong> nao pertence '
+        + 'a lista padrao. Selecione o PI mais proximo como base:</p>'
+        + '<select id="coplan-pi-base-pick" class="select" '
+        + 'style="width:100%;margin-top:8px">'
+        + opts.map(function (o) {
+            var s = (o === sel) ? ' selected' : '';
+            return '<option value="' + escapeHtml(o) + '"' + s + '>'
+              + escapeHtml(o) + '</option>';
+          }).join('')
+        + '</select></div>';
+      var chosen = null;
+      return window.coplanOpenDialog({
+        title: 'Selecionar PI_BASE',
+        html: html,
+        minWidth: '420px',
+        buttons: [
+          { label: 'Cancelar', act: 'cancel' },
+          { label: 'OK', primary: true, act: 'ok' }
+        ],
+        beforeClose: function (act, dlg) {
+          if (act !== 'ok') return true;
+          var s = dlg.querySelector('#coplan-pi-base-pick');
+          chosen = s ? String(s.value || '').trim() : '';
+          return true;
+        }
+      }).then(function (act) {
+        if (act !== 'ok' || !chosen) return null;
+        if (chosen !== CRIAR) return chosen;
+        return new Promise(function (resolve) {
+          var name = window.prompt('Nome do novo PI_BASE:');
+          if (name == null) return resolve(null);
+          var trimmed = String(name).trim();
+          if (!trimmed) return resolve(null);
+          if (!a.add_pi_base_custom) {
+            C.toast('API add_pi_base_custom indisponivel', 'error');
+            return resolve(null);
+          }
+          a.add_pi_base_custom(trimmed).then(function (r) {
+            if (r && r.ok) {
+              C.toast('PI_BASE criado: ' + trimmed, 'success');
+              resolve(trimmed);
+            } else {
+              C.toast('Falha ao criar PI_BASE: '
+                + ((r && r.error) || '?'), 'error');
+              resolve(null);
+            }
+          });
+        });
+      });
+    });
+  }
+  C.pickPiBase = pickPiBase;
+
+  function persistPiBaseMapEntry(pi, base) {
+    var a = api();
+    if (!a || !a.get_pi_base_map || !a.save_pi_base_map) {
+      return Promise.resolve(false);
+    }
+    return a.get_pi_base_map().then(function (cur) {
+      var items = (cur && cur.items && typeof cur.items === 'object')
+        ? Object.assign({}, cur.items) : {};
+      items[pi] = base;
+      return a.save_pi_base_map(items);
+    });
+  }
+  C.persistPiBaseMapEntry = persistPiBaseMapEntry;
+
   // --- helper: re-renderiza chip-list de subestacoes a partir de
   // [principal] + chips beneficiados. Cada SE eh resolvida via
   // get_alimentador_details(alim).se. Dedup case-insensitive, ordem
@@ -23641,7 +23740,10 @@ COPLAN_BRIDGE_JS = """
   // M042 removido: Ano editavel tambem em modo edicao (paridade com
   // legado desktop). applyObra/coplan:obra-active garantem disabled=false.
 
-  // --- M043: change em PI -> resolver_pi_base + prompt se desconhecido.
+  // --- M043: change em PI -> resolver_pi_base + dialogo de selecao
+  // (pickPiBase) se desconhecido. Espelha QInputDialog.getItem do
+  // legado (pi_base.py:117) que mostra uma lista das bases ja conhecidas
+  // + "+ Criar novo PI_BASE...".
   var pi = $('cad-sel-pi');
   if (pi && !pi.__cadastroBound) {
     pi.__cadastroBound = true;
@@ -23651,29 +23753,13 @@ COPLAN_BRIDGE_JS = """
       var a = api();
       if (!a || !a.resolver_pi_base) return;
       a.resolver_pi_base(v).then(function (r) {
-        if (!r || !r.ok) return;
-        if (r.conhecido) return;
-        var sugestao = r.pi_base || '';
-        var entrada = window.prompt(
-          'PI "' + v + '" nao tem PI_BASE conhecido.\\n'
-          + 'Informe a sigla do PI_BASE (ex: DI, ME, TR):',
-          sugestao
-        );
-        if (entrada == null) return;
-        var base = String(entrada).trim().toUpperCase();
-        if (!base) return;
-        if (!a.get_pi_base_map || !a.save_pi_base_map) {
-          C.toast('API de pi_base_map indisponivel', 'error');
-          return;
-        }
-        a.get_pi_base_map().then(function (cur) {
-          var items = (cur && cur.items && typeof cur.items === 'object')
-            ? Object.assign({}, cur.items) : {};
-          items[v] = base;
-          a.save_pi_base_map(items).then(function (resp) {
+        if (!r || !r.ok || r.conhecido) return;
+        return pickPiBase(v, r.pi_base || '').then(function (base) {
+          if (!base) return;
+          return persistPiBaseMapEntry(v, base).then(function (resp) {
             if (resp && resp.ok) {
               C.toast('PI_BASE de "' + v + '" salvo: ' + base, 'success');
-            } else {
+            } else if (resp) {
               C.toast('Falha salvando PI_BASE: '
                 + ((resp && resp.error) || '?'), 'error');
             }
@@ -24236,10 +24322,34 @@ COPLAN_BRIDGE_JS = """
           }
         }
 
-        // 2) Resolver pi_base
+        // 2) Resolver pi_base. Se o PI nao for conhecido, abre o
+        // dialogo de selecao (pickPiBase) -- replica QInputDialog do
+        // desktop. Usado como salvaguarda caso o change do select
+        // cad-sel-pi (M043) nao tenha disparado antes do Salvar.
         if (!payload.pi_base && payload.projeto_investimento && a.resolver_pi_base) {
           return a.resolver_pi_base(payload.projeto_investimento).then(function (r) {
-            if (r && r.ok && r.pi_base) payload.pi_base = r.pi_base;
+            if (!r || !r.ok) return;
+            if (r.conhecido) {
+              if (r.pi_base) payload.pi_base = r.pi_base;
+              return;
+            }
+            var piVal = payload.projeto_investimento;
+            var picker = (C.pickPiBase || (typeof pickPiBase === 'function' ? pickPiBase : null));
+            if (!picker) {
+              if (r.pi_base) payload.pi_base = r.pi_base;
+              return;
+            }
+            return picker(piVal, r.pi_base || '').then(function (base) {
+              if (!base) {
+                if (r.pi_base) payload.pi_base = r.pi_base;
+                return;
+              }
+              payload.pi_base = base;
+              var persist = (C.persistPiBaseMapEntry
+                || (typeof persistPiBaseMapEntry === 'function'
+                    ? persistPiBaseMapEntry : null));
+              if (persist) return persist(piVal, base);
+            });
           });
         }
       })
@@ -24710,18 +24820,37 @@ COPLAN_BRIDGE_JS = """
   }
 
   // ---------- M080: Modal Gerenciar PI_BASE ----------
-  function renderPiList(map) {
+  // Renderiza defaults (read-only, badge) + custom (com botao remover),
+  // espelhando open_manage_pi_base_dialog do desktop (cadastro_mixin.py).
+  // Persistencia via list_pi_base_custom/add_pi_base_custom/
+  // remove_pi_base_custom -- nao mexe em pi_base_map (esse é mapping
+  // PI->base, manipulado durante o prompt do cadastro).
+  function renderPiList(state) {
     var ul = $('pi-list');
     if (!ul) return;
+    var custom = (state && state.custom) || [];
+    var all    = (state && state.all)    || [];
+    var customUpper = custom.map(function (c) { return String(c).toUpperCase(); });
+    var defaults = all.filter(function (a) {
+      return customUpper.indexOf(String(a).toUpperCase()) === -1;
+    });
     ul.innerHTML = '';
-    Object.keys(map).sort().forEach(function (pi) {
+    defaults.forEach(function (n) {
       var li = document.createElement('li');
       li.className = 'row';
-      li.setAttribute('data-pi-name', pi);
+      li.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--border);opacity:0.75;';
+      li.innerHTML = '<span class="mono grow">' + escapeHtml(n) + '</span>'
+        + '<span style="font-size:10px;color:var(--text-soft);'
+        + 'background:var(--surface-2);padding:2px 6px;border-radius:3px;">default</span>';
+      ul.appendChild(li);
+    });
+    custom.forEach(function (n) {
+      var li = document.createElement('li');
+      li.className = 'row';
+      li.setAttribute('data-pi-name', n);
       li.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;';
-      li.innerHTML = '<span class="mono grow">' + escapeHtml(map[pi]) + ' &middot; ' + escapeHtml(pi) + '</span>'
-        + '<button class="btn ghost sm" data-pi-act="rename" type="button" title="Renomear PI"><i data-lucide="pencil"></i></button>'
-        + '<button class="btn ghost sm" data-pi-act="remove" type="button" title="Remover PI"><i data-lucide="trash-2"></i></button>';
+      li.innerHTML = '<span class="mono grow">' + escapeHtml(n) + '</span>'
+        + '<button class="btn ghost sm" data-pi-act="remove" type="button" title="Remover PI_BASE"><i data-lucide="trash-2"></i></button>';
       ul.appendChild(li);
     });
     if (window.lucide) window.lucide.createIcons();
@@ -24729,16 +24858,18 @@ COPLAN_BRIDGE_JS = """
 
   function loadPiList() {
     var a = api();
-    if (!a || !a.get_pi_base_map) return Promise.resolve({});
-    return a.get_pi_base_map().then(function (r) {
-      var map = (r && r.items && typeof r.items === 'object') ? r.items : {};
-      renderPiList(map);
-      return map;
+    if (!a || !a.list_pi_base_custom) return Promise.resolve({});
+    return a.list_pi_base_custom().then(function (r) {
+      var state = (r && r.ok) ? r : { custom: [], all: [] };
+      renderPiList(state);
+      return state;
     });
   }
   C.loadPiList = loadPiList;
+  // Expor tambem com o nome usado por outros módulos.
+  window.coplanLoadPiList = loadPiList;
 
-  // Item selecionado na lista (para Renomear/Remover).
+  // Selecao + clique em botao remover por linha.
   var piSelected = null;
   var ulPi = $('pi-list');
   if (ulPi && !ulPi.__cadastroBound) {
@@ -24746,106 +24877,116 @@ COPLAN_BRIDGE_JS = """
     ulPi.addEventListener('click', function (ev) {
       var btn = ev.target && ev.target.closest && ev.target.closest('button[data-pi-act]');
       var li  = ev.target && ev.target.closest && ev.target.closest('li[data-pi-name]');
-      if (!li) return;
-      // Visual select
+      if (!li) {
+        piSelected = null;
+        if ($('pi-btn-remove')) $('pi-btn-remove').disabled = true;
+        return;
+      }
       Array.prototype.forEach.call(ulPi.querySelectorAll('li'), function (n) {
         n.style.background = '';
       });
       li.style.background = 'var(--surface-2)';
       piSelected = li.getAttribute('data-pi-name') || null;
-      $('pi-btn-rename') && ($('pi-btn-rename').disabled = !piSelected);
-      $('pi-btn-remove') && ($('pi-btn-remove').disabled = !piSelected);
+      if ($('pi-btn-remove')) $('pi-btn-remove').disabled = !piSelected;
+      // Rename nao tem API equivalente (legado tambem nao tinha um endpoint
+      // unico -- remapeia pi_base_map + templates); deixa desabilitado.
+      if ($('pi-btn-rename')) $('pi-btn-rename').disabled = true;
       if (btn) {
         var act = btn.getAttribute('data-pi-act');
-        if (act === 'rename') doRenamePi(piSelected);
         if (act === 'remove') doRemovePi(piSelected);
       }
     });
   }
 
-  function persistMap(newMap, msgOk) {
-    var a = api();
-    if (!a || !a.save_pi_base_map) {
-      C.toast('API save_pi_base_map indisponivel', 'error');
-      return Promise.resolve(false);
-    }
-    return a.save_pi_base_map(newMap).then(function (r) {
-      if (r && r.ok) {
-        C.toast(msgOk || 'PI_BASE atualizado', 'success');
-        loadPiList();
-        return true;
-      }
-      C.toast('Falha: ' + ((r && r.error) || '?'), 'error');
-      return false;
-    });
-  }
-
   function doAddPi() {
-    var pi = window.prompt('Nome do PI (ex.: DISTRIBUICAO):');
-    if (!pi) return;
-    pi = String(pi).trim();
-    if (!pi) return;
-    var base = window.prompt('Sigla PI_BASE (ex.: DI):');
-    if (!base) return;
-    base = String(base).trim().toUpperCase();
-    if (!base) return;
-    loadPiList().then(function (map) {
-      var merged = Object.assign({}, map);
-      merged[pi] = base;
-      persistMap(merged, 'PI_BASE adicionado');
-    });
-  }
-
-  function doRenamePi(pi) {
-    if (!pi) return;
-    loadPiList().then(function (map) {
-      var atual = map[pi];
-      var novoNome = window.prompt('Novo nome do PI:', pi);
-      if (novoNome == null) return;
-      novoNome = String(novoNome).trim();
-      if (!novoNome) return;
-      var novaBase = window.prompt('Nova sigla PI_BASE:', atual);
-      if (novaBase == null) return;
-      novaBase = String(novaBase).trim().toUpperCase();
-      if (!novaBase) return;
-      var merged = Object.assign({}, map);
-      delete merged[pi];
-      merged[novoNome] = novaBase;
-      persistMap(merged, 'PI_BASE renomeado');
+    var input = $('pi-input-novo');
+    var v = String((input && input.value) || '').trim();
+    if (!v) {
+      C.toast('Digite o nome do novo PI_BASE', 'warn');
+      if (input) input.focus();
+      return;
+    }
+    var a = api();
+    if (!a || !a.add_pi_base_custom) {
+      C.toast('API add_pi_base_custom indisponivel', 'error');
+      return;
+    }
+    a.add_pi_base_custom(v).then(function (st) {
+      if (st && st.ok) {
+        renderPiList(st);
+        if (input) input.value = '';
+        C.toast('PI_BASE adicionado: ' + v, 'success');
+      } else {
+        C.toast('Falha: ' + ((st && st.error) || '?'), 'error');
+      }
     });
   }
 
   function doRemovePi(pi) {
     if (!pi) return;
-    if (!window.confirm('Remover PI "' + pi + '"?')) return;
-    loadPiList().then(function (map) {
-      var merged = Object.assign({}, map);
-      delete merged[pi];
-      persistMap(merged, 'PI_BASE removido');
+    if (!window.confirm('Remover PI_BASE "' + pi + '"?')) return;
+    var a = api();
+    if (!a || !a.remove_pi_base_custom) {
+      C.toast('API remove_pi_base_custom indisponivel', 'error');
+      return;
+    }
+    a.remove_pi_base_custom(pi).then(function (st) {
+      if (st && st.ok) {
+        renderPiList(st);
+        C.toast('PI_BASE removido: ' + pi, 'success');
+        piSelected = null;
+        if ($('pi-btn-remove')) $('pi-btn-remove').disabled = true;
+      } else {
+        C.toast('Falha: ' + ((st && st.error) || '?'), 'error');
+      }
     });
   }
 
   function doRestorePi() {
-    if (!window.confirm('Restaurar padroes? Isso remove TODO o pi_base_map customizado.')) return;
-    persistMap({}, 'PI_BASE restaurado para padroes');
+    if (!window.confirm('Restaurar padrões? Isso remove TODOS os PI_BASE customizados.')) return;
+    var a = api();
+    if (!a || !a.list_pi_base_custom || !a.remove_pi_base_custom) {
+      C.toast('API indisponivel', 'error');
+      return;
+    }
+    a.list_pi_base_custom().then(function (st) {
+      var custom = (st && st.custom) || [];
+      if (!custom.length) {
+        C.toast('Nada para remover', 'info');
+        return;
+      }
+      var seq = Promise.resolve();
+      custom.forEach(function (n) {
+        seq = seq.then(function () { return a.remove_pi_base_custom(n); });
+      });
+      seq.then(loadPiList).then(function () {
+        C.toast('PI_BASE restaurado aos padrões', 'success');
+      });
+    });
   }
 
-  ['pi-btn-add', 'pi-btn-restore'].forEach(function (id) {
-    var b = $(id);
-    if (!b || b.__cadastroBound) return;
-    b.__cadastroBound = true;
-    b.addEventListener('click', id === 'pi-btn-add' ? doAddPi : doRestorePi);
-  });
-  // Renomear/Remover via barra inferior tambem
-  var btnRen = $('pi-btn-rename');
-  if (btnRen && !btnRen.__cadastroBound) {
-    btnRen.__cadastroBound = true;
-    btnRen.addEventListener('click', function () { doRenamePi(piSelected); });
+  var btnAdd = $('pi-btn-add');
+  if (btnAdd && !btnAdd.__cadastroBound) {
+    btnAdd.__cadastroBound = true;
+    btnAdd.addEventListener('click', doAddPi);
+  }
+  var btnRestore = $('pi-btn-restore');
+  if (btnRestore && !btnRestore.__cadastroBound) {
+    btnRestore.__cadastroBound = true;
+    btnRestore.addEventListener('click', doRestorePi);
   }
   var btnRem = $('pi-btn-remove');
   if (btnRem && !btnRem.__cadastroBound) {
     btnRem.__cadastroBound = true;
     btnRem.addEventListener('click', function () { doRemovePi(piSelected); });
+  }
+  // Enter no input adiciona.
+  var inpNovo = $('pi-input-novo');
+  if (inpNovo && !inpNovo.__cadastroBound) {
+    inpNovo.__cadastroBound = true;
+    inpNovo.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); doAddPi(); }
+    });
   }
 
   // Carrega lista quando o modal abrir.
