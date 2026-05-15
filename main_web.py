@@ -6838,8 +6838,10 @@ class CoplanApi:
           * ``"ask"`` (padrao): se houver duplicadas, retorna
             ``need_user_action=True`` com a lista para o JS perguntar
             ao usuario, sem importar nada
-          * ``"merge"``: aplica build_merge_updates + update_obra (so
-            preenche campos vazios + atualiza chaves)
+          * ``"merge"``: aplica build_merge_updates + update_obra
+            (sobrescreve colunas preenchidas que diferem do Excel,
+            inclusive ``ano_``; preserva ``cod``/``data_criacao``/
+            ``criado_por``)
           * ``"create"``: ignora duplicidade e usa insert_obra
             (pode falhar por unique-index)
           * ``"skip"``: pula obras duplicadas
@@ -22925,8 +22927,9 @@ COPLAN_BRIDGE_JS = """
                 + '</pre>'
                 + '<p style="margin-top:12px"><strong>Como tratar?</strong></p>'
                 + '<ul style="margin:6px 0 0;padding-left:20px;color:#475569">'
-                + '<li><strong>Mesclar</strong>: atualiza colunas vazias '
-                + 'na obra existente com valores do Excel</li>'
+                + '<li><strong>Mesclar</strong>: atualiza a obra existente '
+                + 'com os valores do Excel (sobrescreve colunas preenchidas '
+                + 'quando diferem, ex.: ano)</li>'
                 + '<li><strong>Criar</strong>: insere mesmo assim '
                 + '(pode falhar se houver unique-index)</li>'
                 + '<li><strong>Pular</strong>: ignora as duplicadas e '
