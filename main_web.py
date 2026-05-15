@@ -24236,10 +24236,40 @@ COPLAN_BRIDGE_JS = """
           }
         }
 
-        // 2) Resolver pi_base
+        // 2) Resolver pi_base. Se o PI nao for conhecido, replica o
+        // prompt da M043 (caso o usuario nao tenha disparado change no
+        // select antes de Salvar -- ex.: paste programatico, edicao
+        // remota, ou listener nao bindado por timing).
         if (!payload.pi_base && payload.projeto_investimento && a.resolver_pi_base) {
           return a.resolver_pi_base(payload.projeto_investimento).then(function (r) {
-            if (r && r.ok && r.pi_base) payload.pi_base = r.pi_base;
+            if (!r || !r.ok) return;
+            if (r.conhecido) {
+              if (r.pi_base) payload.pi_base = r.pi_base;
+              return;
+            }
+            var pi = payload.projeto_investimento;
+            var entrada = window.prompt(
+              'PI "' + pi + '" nao tem PI_BASE conhecido.\n'
+              + 'Informe a sigla do PI_BASE (ex: DI, ME, TR):',
+              r.pi_base || ''
+            );
+            if (entrada == null) {
+              if (r.pi_base) payload.pi_base = r.pi_base;
+              return;
+            }
+            var base = String(entrada).trim().toUpperCase();
+            if (!base) {
+              if (r.pi_base) payload.pi_base = r.pi_base;
+              return;
+            }
+            payload.pi_base = base;
+            if (!a.get_pi_base_map || !a.save_pi_base_map) return;
+            return a.get_pi_base_map().then(function (cur) {
+              var items = (cur && cur.items && typeof cur.items === 'object')
+                ? Object.assign({}, cur.items) : {};
+              items[pi] = base;
+              return a.save_pi_base_map(items);
+            });
           });
         }
       })
