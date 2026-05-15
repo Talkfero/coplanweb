@@ -6516,28 +6516,59 @@ class CoplanApi:
         return {"ok": True, "error": "", "items": out}
 
     def list_pi_base_custom(self) -> dict[str, Any]:
-        """Devolve {ok, custom: [...], all: [...]}.
-        - custom: lista mutavel salva em config.pi_base_custom
-        - all: combinacao de defaults (de pi_metadata_service) + custom"""
+        """Devolve {ok, custom: [...], all: [...], hidden_defaults: [...]}.
+        - custom: lista mutavel salva em config.pi_base_custom.
+        - hidden_defaults: defaults que o usuario removeu (config.
+          pi_base_hidden_defaults) -- filtrados de `all`.
+        - all: defaults visiveis (defaults menos hidden) + custom."""
         try:
             from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}",
-                    "custom": [], "all": []}
+                    "custom": [], "all": [], "hidden_defaults": []}
         custom_raw = cfg.get("pi_base_custom") or []
         if not isinstance(custom_raw, list):
             custom_raw = []
         custom = [str(c).strip() for c in custom_raw if str(c).strip()]
+        hidden_raw = cfg.get("pi_base_hidden_defaults") or []
+        if not isinstance(hidden_raw, list):
+            hidden_raw = []
+        hidden = [str(h).strip() for h in hidden_raw if str(h).strip()]
         all_bases: list[str] = []
         try:
             from core.services.pi_metadata_service import (  # type: ignore[import-not-found]
                 listar_todas_bases,
             )
-            all_bases = list(listar_todas_bases(cfg, custom_bases=tuple(custom)))
+            all_bases = list(listar_todas_bases(
+                cfg,
+                custom_bases=tuple(custom),
+                hidden_defaults=tuple(hidden),
+            ))
         except Exception:  # noqa: BLE001
             all_bases = list(custom)
-        return {"ok": True, "error": "", "custom": custom, "all": all_bases}
+        return {"ok": True, "error": "", "custom": custom,
+                "all": all_bases, "hidden_defaults": hidden}
+
+    def _is_default_pi_base(self, name: str) -> bool:
+        """True se `name` (case-insensitive, sem acento) bate com algum
+        tipo_base de DEFAULT_PI_METADATA. Usado para distinguir entre
+        remover de pi_base_custom vs. ocultar via pi_base_hidden_defaults."""
+        try:
+            from core.services.pi_metadata_service import (  # type: ignore[import-not-found]
+                DEFAULT_PI_METADATA,
+                normalize_key,
+            )
+        except Exception:  # noqa: BLE001
+            return False
+        target = normalize_key(name)
+        if not target:
+            return False
+        for entry in DEFAULT_PI_METADATA:
+            base = entry.get("tipo_base") or entry.get("nome") or ""
+            if normalize_key(str(base)) == target:
+                return True
+        return False
 
     def add_pi_base_custom(self, name: Any) -> dict[str, Any]:
         s = str(name or "").strip()
@@ -6548,13 +6579,34 @@ class CoplanApi:
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}"}
+        # Se `s` corresponde a um default oculto, restauramos (un-hide).
+        hidden_raw = cfg.get("pi_base_hidden_defaults") or []
+        if not isinstance(hidden_raw, list):
+            hidden_raw = []
+        upper_s = s.upper()
+        new_hidden = [
+            h for h in hidden_raw
+            if str(h).strip().upper() != upper_s
+        ]
+        if len(new_hidden) != len(hidden_raw):
+            try:
+                ConfigManager.save_config(
+                    {"pi_base_hidden_defaults": new_hidden}
+                )
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": f"save: {exc}"}
+            self._config = None
+            return self.list_pi_base_custom()
         existing = cfg.get("pi_base_custom") or []
         if not isinstance(existing, list):
             existing = []
         # Dedupe case-insensitive (mas mantem capitalizacao do usuario).
         upper_set = {str(x).strip().upper() for x in existing}
-        if s.upper() in upper_set:
+        if upper_s in upper_set:
             return {"ok": False, "error": "PI ja existe"}
+        # Tambem rejeita se ja eh um default visivel (nao oculto).
+        if self._is_default_pi_base(s):
+            return {"ok": False, "error": "PI ja existe como default"}
         existing.append(s)
         try:
             ConfigManager.save_config({"pi_base_custom": existing})
@@ -6576,14 +6628,34 @@ class CoplanApi:
         if not isinstance(existing, list):
             existing = []
         new_list = [x for x in existing if str(x).strip().upper() != s.upper()]
-        if len(new_list) == len(existing):
-            return {"ok": False, "error": "PI nao encontrada em pi_base_custom"}
-        try:
-            ConfigManager.save_config({"pi_base_custom": new_list}, overwrite=False)
-        except Exception as exc:  # noqa: BLE001
-            return {"ok": False, "error": f"save: {exc}"}
-        self._config = None
-        return self.list_pi_base_custom()
+        if len(new_list) != len(existing):
+            try:
+                ConfigManager.save_config(
+                    {"pi_base_custom": new_list}, overwrite=False,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": f"save: {exc}"}
+            self._config = None
+            return self.list_pi_base_custom()
+        # Nao estava em pi_base_custom -- talvez seja um default. Se for,
+        # registramos em pi_base_hidden_defaults (mecanismo para "remover"
+        # defaults sem alterar DEFAULT_PI_METADATA).
+        if self._is_default_pi_base(s):
+            hidden_raw = cfg.get("pi_base_hidden_defaults") or []
+            if not isinstance(hidden_raw, list):
+                hidden_raw = []
+            upper_set = {str(x).strip().upper() for x in hidden_raw}
+            if s.upper() not in upper_set:
+                hidden_raw.append(s)
+                try:
+                    ConfigManager.save_config(
+                        {"pi_base_hidden_defaults": hidden_raw}
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    return {"ok": False, "error": f"save: {exc}"}
+                self._config = None
+            return self.list_pi_base_custom()
+        return {"ok": False, "error": "PI nao encontrada"}
 
     def get_pi_base_map(self) -> dict[str, Any]:
         try:
@@ -24838,10 +24910,14 @@ COPLAN_BRIDGE_JS = """
     defaults.forEach(function (n) {
       var li = document.createElement('li');
       li.className = 'row';
-      li.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--border);opacity:0.75;';
+      li.setAttribute('data-pi-name', n);
+      li.setAttribute('data-pi-default', '1');
+      li.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;';
       li.innerHTML = '<span class="mono grow">' + escapeHtml(n) + '</span>'
         + '<span style="font-size:10px;color:var(--text-soft);'
-        + 'background:var(--surface-2);padding:2px 6px;border-radius:3px;">default</span>';
+        + 'background:var(--surface-2);padding:2px 6px;border-radius:3px;'
+        + 'margin-right:8px;">default</span>'
+        + '<button class="btn ghost sm" data-pi-act="remove" type="button" title="Ocultar este PI_BASE default"><i data-lucide="trash-2"></i></button>';
       ul.appendChild(li);
     });
     custom.forEach(function (n) {
@@ -24924,7 +25000,17 @@ COPLAN_BRIDGE_JS = """
 
   function doRemovePi(pi) {
     if (!pi) return;
-    if (!window.confirm('Remover PI_BASE "' + pi + '"?')) return;
+    // Defaults nao sao apagados; sao marcados como ocultos via
+    // pi_base_hidden_defaults (re-exibiveis com Restaurar padroes ou
+    // adicionando o nome de volta).
+    var li = ulPi && ulPi.querySelector('li[data-pi-name="' + pi.replace(/"/g, '\\"') + '"]');
+    var isDefault = li && li.getAttribute('data-pi-default') === '1';
+    var msg = isDefault
+      ? 'Ocultar o PI_BASE default "' + pi + '"? '
+        + 'Voce pode restaura-lo depois clicando em "Restaurar padroes" '
+        + 'ou re-adicionando o mesmo nome.'
+      : 'Remover PI_BASE "' + pi + '"?';
+    if (!window.confirm(msg)) return;
     var a = api();
     if (!a || !a.remove_pi_base_custom) {
       C.toast('API remove_pi_base_custom indisponivel', 'error');
@@ -24943,21 +25029,29 @@ COPLAN_BRIDGE_JS = """
   }
 
   function doRestorePi() {
-    if (!window.confirm('Restaurar padrões? Isso remove TODOS os PI_BASE customizados.')) return;
+    if (!window.confirm('Restaurar padrões? Isso remove TODOS os PI_BASE customizados e reexibe quaisquer defaults ocultos.')) return;
     var a = api();
-    if (!a || !a.list_pi_base_custom || !a.remove_pi_base_custom) {
+    if (!a || !a.list_pi_base_custom || !a.remove_pi_base_custom
+        || !a.add_pi_base_custom) {
       C.toast('API indisponivel', 'error');
       return;
     }
     a.list_pi_base_custom().then(function (st) {
       var custom = (st && st.custom) || [];
-      if (!custom.length) {
-        C.toast('Nada para remover', 'info');
+      var hidden = (st && st.hidden_defaults) || [];
+      if (!custom.length && !hidden.length) {
+        C.toast('Nada para restaurar', 'info');
         return;
       }
       var seq = Promise.resolve();
       custom.forEach(function (n) {
         seq = seq.then(function () { return a.remove_pi_base_custom(n); });
+      });
+      // add_pi_base_custom no nome de um default oculto faz un-hide
+      // (consome a entrada de pi_base_hidden_defaults e nao adiciona ao
+      // pi_base_custom).
+      hidden.forEach(function (n) {
+        seq = seq.then(function () { return a.add_pi_base_custom(n); });
       });
       seq.then(loadPiList).then(function () {
         C.toast('PI_BASE restaurado aos padrões', 'success');
