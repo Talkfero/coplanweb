@@ -323,13 +323,24 @@ def listar_todas_bases(
     config: Optional[dict] = None,
     *,
     custom_bases: Sequence[str] = (),
+    hidden_defaults: Sequence[str] = (),
 ) -> list[str]:
     """Lista de bases de PI: defaults + config + custom_bases.
 
     ``custom_bases`` e o estado mutavel de sessao (``PI_BASE_CUSTOM`` no
     legado), passado pela UI. Service e stateless e nao toca nele.
     Deduplica case-insensitive (sem acento).
+
+    ``hidden_defaults`` lista nomes de bases default que o usuario removeu
+    via UI (config.pi_base_hidden_defaults). Filtra qualquer base default
+    cujo tipo_base normalizado bata com algum nome em hidden_defaults --
+    permite "desligar" defaults sem editar a constante DEFAULT_PI_METADATA.
     """
+    hidden_keys = {
+        normalize_key(str(h or "")).strip()
+        for h in hidden_defaults
+        if str(h or "").strip()
+    }
     bases: list[str] = []
     seen: set[str] = set()
 
@@ -337,6 +348,8 @@ def listar_todas_bases(
         base = str(entry.get("tipo_base") or entry.get("nome") or "").strip()
         key = normalize_key(base).strip()
         if not key or key in seen:
+            continue
+        if key in hidden_keys:
             continue
         bases.append(base)
         seen.add(key)
