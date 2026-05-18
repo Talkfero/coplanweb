@@ -12003,15 +12003,19 @@ COPLAN_BRIDGE_JS = """
         tsvLines.push(cells.join('\\t'));
       });
       var txt = tsvLines.join('\\n');
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(txt).then(function () {
-          if (typeof window.coplanToast === 'function') {
-            window.coplanToast(rows.length + ' linha(s) copiada(s)'
-              + ' (TSV)', 'info');
-          }
-        });
-      } else {
-        // Fallback execCommand
+      function visCopyOk() {
+        if (typeof window.coplanToast === 'function') {
+          window.coplanToast(rows.length + ' linha(s) copiada(s)'
+            + ' (TSV)', 'info');
+        }
+      }
+      function visCopyErr() {
+        if (typeof window.coplanToast === 'function') {
+          window.coplanToast('Falha ao copiar para a area de'
+            + ' transferencia', 'error');
+        }
+      }
+      function visCopyExec() {
         try {
           var ta = document.createElement('textarea');
           ta.value = txt;
@@ -12019,13 +12023,17 @@ COPLAN_BRIDGE_JS = """
           ta.style.opacity = '0';
           document.body.appendChild(ta);
           ta.select();
-          document.execCommand('copy');
+          var ok = document.execCommand('copy');
           document.body.removeChild(ta);
-          if (typeof window.coplanToast === 'function') {
-            window.coplanToast(rows.length + ' linha(s) copiada(s)'
-              + ' (TSV)', 'info');
-          }
-        } catch (_e) {}
+          return !!ok;
+        } catch (_e) { return false; }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(visCopyOk, function () {
+          if (visCopyExec()) visCopyOk(); else visCopyErr();
+        });
+      } else {
+        if (visCopyExec()) visCopyOk(); else visCopyErr();
       }
     });
 
