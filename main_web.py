@@ -12430,8 +12430,19 @@ COPLAN_BRIDGE_JS = """
       if (t.indexOf(target) === 0) {
         var node = fields[i].querySelector('input, select');
         if (node) {
-          if (node.tagName === 'SELECT') node.selectedIndex = 0;
-          else node.value = '';
+          if (node.tagName === 'SELECT') {
+            if (node.multiple) {
+              // selectedIndex=0 num multi-select SELECIONA a primeira
+              // option em vez de limpar; precisamos desmarcar todas.
+              for (var oi = 0; oi < node.options.length; oi++) {
+                node.options[oi].selected = false;
+              }
+            } else {
+              node.selectedIndex = 0;
+            }
+          } else {
+            node.value = '';
+          }
         }
         return;
       }
