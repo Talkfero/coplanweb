@@ -12728,6 +12728,13 @@ COPLAN_BRIDGE_JS = """
                   'Exportar Detalhamento', 'export_detalhamento', r);
               }
             }
+          }).catch(function (err) {
+            toast('Falhou: ' + (err && err.message || err || '?'), 'error');
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Exportar Detalhamento', 'export_detalhamento',
+                { error: String(err && err.message || err || '?') });
+            }
           });
         });
       });
@@ -12773,6 +12780,14 @@ COPLAN_BRIDGE_JS = """
                     'Relatorio detalhado por projeto',
                     'export_relatorio_criterios_projeto', r);
                 }
+              }
+            }).catch(function (err) {
+              toast('Falhou: ' + (err && err.message || err || '?'), 'error');
+              if (window.coplanReportError) {
+                window.coplanReportError(
+                  'Relatorio detalhado por projeto',
+                  'export_relatorio_criterios_projeto',
+                  { error: String(err && err.message || err || '?') });
               }
             });
           });
@@ -12827,6 +12842,14 @@ COPLAN_BRIDGE_JS = """
                     'export_relatorio_criterios', r);
                 }
               }
+            }).catch(function (err) {
+              toast('Falhou: ' + (err && err.message || err || '?'), 'error');
+              if (window.coplanReportError) {
+                window.coplanReportError(
+                  'Relatorio de criterios',
+                  'export_relatorio_criterios',
+                  { error: String(err && err.message || err || '?') });
+              }
             });
           });
         });
@@ -12850,6 +12873,13 @@ COPLAN_BRIDGE_JS = """
                 window.coplanReportError(
                   'Nota de Colapso', 'export_nota_colapso', r);
               }
+            }
+          }).catch(function (err) {
+            toast('Falhou: ' + (err && err.message || err || '?'), 'error');
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Nota de Colapso', 'export_nota_colapso',
+                { error: String(err && err.message || err || '?') });
             }
           });
         });
@@ -14768,6 +14798,8 @@ COPLAN_BRIDGE_JS = """
             } else {
               toast('Falha: ' + (r && r.error || '?'), 'error');
             }
+          }).catch(function (err) {
+            toast('Falha: ' + (err && err.message || err || '?'), 'error');
           });
         },
       });
@@ -18401,6 +18433,8 @@ COPLAN_BRIDGE_JS = """
             a.export_detalhamento([cod]).then(function (r) {
               if (r && r.ok) toast('XLSX salvo: ' + r.path, 'info');
               else toast('Falhou: ' + (r && r.error || '?'), 'error');
+            }).catch(function (err) {
+              toast('Falhou: ' + (err && err.message || err || '?'), 'error');
             });
           }
           break;
@@ -20602,6 +20636,11 @@ COPLAN_BRIDGE_JS = """
               window.coplanToast('XLSX salvo: ' + r.path, 'info');
             } else if (r && typeof window.coplanToast === 'function') {
               window.coplanToast('Falha: ' + (r.error || '?'), 'error');
+            }
+          }).catch(function (err) {
+            if (typeof window.coplanToast === 'function') {
+              window.coplanToast(
+                'Falha: ' + (err && err.message || err || '?'), 'error');
             }
           });
         });
