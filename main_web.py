@@ -23162,6 +23162,12 @@ COPLAN_BRIDGE_JS = """
           } else if (r && typeof window.coplanToast === 'function') {
             window.coplanToast('Falha: ' + (r.error || '?'), 'error');
           }
+        }).catch(function (err) {
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast(
+              'Falha ao exportar: ' + ((err && err.message) || err || '?'),
+              'error');
+          }
         });
       });
     }
