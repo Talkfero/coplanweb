@@ -23689,7 +23689,7 @@ COPLAN_BRIDGE_JS = """
     if (!a || typeof window.coplanOpenDialog !== 'function'
         || !a.list_pi_base_custom) {
       var raw = window.prompt(
-        'PI "' + pi + '" nao tem PI_BASE conhecido.\nInforme o PI_BASE base:',
+        'PI "' + pi + '" nao tem PI_BASE conhecido.\\nInforme o PI_BASE base:',
         sugestao || ''
       );
       if (raw == null) return Promise.resolve(null);
@@ -29056,7 +29056,7 @@ COPLAN_BRIDGE_JS = """
       s.lines.forEach(function (l) { lines.push(String(l)); });
       lines.push('');
     });
-    return lines.join('\n');
+    return lines.join('\\n');
   }
 
   function close(modal) {
@@ -29083,7 +29083,7 @@ COPLAN_BRIDGE_JS = """
       title: title, summary: summary, sections: sections,
     });
     if (logPath) {
-      fullText = '# Log salvo em: ' + logPath + '\n\n' + fullText;
+      fullText = '# Log salvo em: ' + logPath + '\\n\\n' + fullText;
     }
 
     // Limpa modal anterior se houver
@@ -29144,7 +29144,7 @@ COPLAN_BRIDGE_JS = """
         + 'padding:8px 10px;max-height:240px;overflow:auto;'
         + 'font-family:var(--font-mono, monospace);font-size:11.5px;'
         + 'white-space:pre-wrap;margin:0;color:var(--text);">'
-        + s.lines.map(function (l) { return esc(l); }).join('\n')
+        + s.lines.map(function (l) { return esc(l); }).join('\\n')
         + '</pre></div>';
     });
     if (!sectionsHtml) {
