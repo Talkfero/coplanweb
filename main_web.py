@@ -12593,12 +12593,13 @@ COPLAN_BRIDGE_JS = """
         r.classList.remove('selected');
       }
     });
+    var total = Number(window.__coplanFullCount) || rows.length;
     if (typeof window.coplanSetSelectionCount === 'function') {
-      window.coplanSetSelectionCount(sel, rows.length);
+      window.coplanSetSelectionCount(sel, total);
     }
     var badge = document.querySelector('#tab-visualizar .table-header .badge');
     if (badge) {
-      badge.textContent = rows.length + ' resultados · ' + sel + ' selecionadas';
+      badge.textContent = total + ' resultados · ' + sel + ' selecionadas';
     }
   }
   // Re-bind selection on every render (coplan:obras dispara apos renderObras).
