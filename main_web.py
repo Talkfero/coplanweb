@@ -13206,8 +13206,11 @@ COPLAN_BRIDGE_JS = """
             navigator.clipboard.writeText(txt).then(function () {
               toast(cods.length + ' COD copiado(s)', 'info');
             }, function () {
-              fallbackCopy(txt) && toast(cods.length + ' COD copiado(s)',
-                                         'info');
+              if (fallbackCopy(txt)) {
+                toast(cods.length + ' COD copiado(s)', 'info');
+              } else {
+                toast('Falha ao copiar', 'error');
+              }
             });
             return;
           }
@@ -14637,17 +14640,27 @@ COPLAN_BRIDGE_JS = """
         icon: 'clipboard',
         action: function () {
           var txt = cods.join('\\n');
+          function fb() {
+            try {
+              var ta = document.createElement('textarea');
+              ta.value = txt; document.body.appendChild(ta);
+              ta.select();
+              var ok = document.execCommand('copy');
+              document.body.removeChild(ta);
+              return !!ok;
+            } catch (e) { return false; }
+          }
+          function done(ok) {
+            toast(ok ? (cods.length + ' COD copiado(s)')
+                     : 'Falha ao copiar',
+                  ok ? 'info' : 'error');
+          }
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(txt).then(function () {
-              toast(cods.length + ' COD copiado(s)', 'info');
-            });
+              done(true);
+            }, function () { done(fb()); });
           } else {
-            var ta = document.createElement('textarea');
-            ta.value = txt; document.body.appendChild(ta);
-            ta.select();
-            try { document.execCommand('copy'); } catch (e) {}
-            document.body.removeChild(ta);
-            toast(cods.length + ' COD copiado(s)', 'info');
+            done(fb());
           }
         },
       });
@@ -16472,12 +16485,33 @@ COPLAN_BRIDGE_JS = """
       document.body.removeChild(modal);
     };
     function copyTo(text, label) {
+      function toastMsg(msg, lvl) {
+        if (typeof window.coplanToast === 'function') {
+          window.coplanToast(msg, lvl);
+        }
+      }
+      function fb() {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          var ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          return !!ok;
+        } catch (e) { return false; }
+      }
+      function done(ok) {
+        toastMsg(ok ? (label + ' copiado') : ('Falha ao copiar ' + label),
+                 ok ? 'info' : 'error');
+      }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function () {
-          if (typeof window.coplanToast === 'function') {
-            window.coplanToast(label + ' copiado', 'info');
-          }
-        });
+          done(true);
+        }, function () { done(fb()); });
+      } else {
+        done(fb());
       }
     }
     var bC = byId('coplan-preview-cod-copy-cod');
@@ -18421,19 +18455,30 @@ COPLAN_BRIDGE_JS = """
           }
           break;
         case 'copy':
-          if (navigator.clipboard) {
-            navigator.clipboard.writeText(cod).then(function () {
-              toast('COD ' + cod + ' copiado', 'info');
-            });
-          } else {
-            var ta = document.createElement('textarea');
-            ta.value = cod;
-            document.body.appendChild(ta);
-            ta.select();
-            try { document.execCommand('copy'); } catch (e) {}
-            document.body.removeChild(ta);
-            toast('COD ' + cod + ' copiado', 'info');
-          }
+          (function () {
+            function fb() {
+              try {
+                var ta = document.createElement('textarea');
+                ta.value = cod;
+                document.body.appendChild(ta);
+                ta.select();
+                var ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                return !!ok;
+              } catch (e) { return false; }
+            }
+            function done(ok) {
+              toast(ok ? ('COD ' + cod + ' copiado') : 'Falha ao copiar',
+                    ok ? 'info' : 'error');
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(cod).then(function () {
+                done(true);
+              }, function () { done(fb()); });
+            } else {
+              done(fb());
+            }
+          })();
           break;
         case 'detalhe':
           if (a && a.export_detalhamento) {
