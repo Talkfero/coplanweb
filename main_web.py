@@ -23161,12 +23161,30 @@ COPLAN_BRIDGE_JS = """
                         'Falha ao iniciar: ' + (st.error || '?'), 'error');
                     }
                   }
+                }).catch(function (err) {
+                  if (window.coplanProgress && window.coplanProgress.close) {
+                    window.coplanProgress.close();
+                  }
+                  if (typeof window.coplanToast === 'function') {
+                    window.coplanToast(
+                      'Falha ao importar: '
+                      + ((err && err.message) || err || '?'),
+                      'error');
+                  }
                 });
               } else {
                 if (typeof window.coplanToast === 'function') {
                   window.coplanToast('Aplicando ' + act + '...', 'info');
                 }
-                api.import_excel_apply(r.path, act).then(handleFinal);
+                api.import_excel_apply(r.path, act).then(handleFinal)
+                  .catch(function (err) {
+                    if (typeof window.coplanToast === 'function') {
+                      window.coplanToast(
+                        'Falha ao importar: '
+                        + ((err && err.message) || err || '?'),
+                        'error');
+                    }
+                  });
               }
             });
             return;
@@ -23199,10 +23217,27 @@ COPLAN_BRIDGE_JS = """
                     'Falha ao iniciar: ' + (st.error || '?'), 'error');
                 }
               }
+            }).catch(function (err) {
+              if (window.coplanProgress && window.coplanProgress.close) {
+                window.coplanProgress.close();
+              }
+              if (typeof window.coplanToast === 'function') {
+                window.coplanToast(
+                  'Falha ao importar: '
+                  + ((err && err.message) || err || '?'),
+                  'error');
+              }
             });
             return;
           }
           handleFinal(r);
+        }).catch(function (err) {
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast(
+              'Falha ao importar: '
+              + ((err && err.message) || err || '?'),
+              'error');
+          }
         });
       });
     }
