@@ -15550,6 +15550,17 @@ COPLAN_BRIDGE_JS = """
             window.coplanToast('Campo Descricao nao encontrado', 'warn');
           }
         }
+      }).catch(function (err) {
+        console.warn('[coplan/cadastro] aplicar_template_descricao:', err);
+        if (typeof window.coplanToast === 'function') {
+          window.coplanToast('Falha ao aplicar template: '
+            + (err && err.message || err), 'error');
+        }
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Templates', 'aplicar_template_descricao',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     });
     return true;
@@ -15629,6 +15640,14 @@ COPLAN_BRIDGE_JS = """
     if (!(api && api.get_modulos_extras)) return;
     api.get_modulos_extras(pi).then(function (r) {
       renderExtras((r && r.extras) || []);
+    }).catch(function (err) {
+      console.warn('[coplan/cadastro] get_modulos_extras:', err);
+      renderExtras([]);
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Chaves extras', 'get_modulos_extras',
+          { error: String((err && err.message) || err || '?') });
+      }
     });
   }
   function bind() {
