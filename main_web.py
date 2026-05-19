@@ -11834,6 +11834,19 @@ COPLAN_BRIDGE_JS = """
       } else {
         console.warn('[coplan] search_obras erro:', resp && resp.error);
       }
+    }).catch(function (err) {
+      console.warn('[coplan] search_obras catch:', err);
+      if (typeof window.coplanToast === 'function') {
+        window.coplanToast(
+          'Falha ao pesquisar obras: '
+          + ((err && err.message) || err || '?'),
+          'error');
+      }
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Pesquisar obras', 'search_obras',
+          { error: String((err && err.message) || err || '?') });
+      }
     });
   };
 
