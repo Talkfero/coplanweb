@@ -29764,6 +29764,14 @@ COPLAN_BRIDGE_JS = """
       api.open_logs_folder().then(function (r) {
         if (r && r.ok) toast('Pasta: ' + r.path, 'info');
         else toast('Falha: ' + (r && r.error || '?'), 'error');
+      }).catch(function (err) {
+        console.warn('[coplan] open_logs_folder falhou:', err);
+        toast('Falha ao abrir pasta de logs: '
+          + (err && (err.message || err) || '?'), 'error');
+        if (typeof window.coplanReportError === 'function') {
+          window.coplanReportError('Abrir pasta de logs',
+            'open_logs_folder', { error: String(err && (err.message || err) || '?') });
+        }
       });
     });
     footer.querySelector('[data-act="save"]').addEventListener('click', function () {
@@ -29778,6 +29786,14 @@ COPLAN_BRIDGE_JS = """
           // silencioso
         } else {
           toast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+      }).catch(function (err) {
+        console.warn('[coplan] save_log_txt falhou:', err);
+        toast('Falha ao salvar log: '
+          + (err && (err.message || err) || '?'), 'error');
+        if (typeof window.coplanReportError === 'function') {
+          window.coplanReportError('Salvar log',
+            'save_log_txt', { error: String(err && (err.message || err) || '?') });
         }
       });
     });
