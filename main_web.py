@@ -27645,12 +27645,29 @@ COPLAN_BRIDGE_JS = """
             if (a.cenario_active_set) {
               a.cenario_active_set('').then(function () {
                 refreshActive();
+              }).catch(function (err) {
+                console.warn(
+                  '[coplan] cenario_active_set vazio falhou:', err);
+                if (typeof window.coplanToast === 'function') {
+                  window.coplanToast(
+                    'Falha ao limpar cenário fantasma: '
+                    + ((err && err.message) || err || '?'),
+                    'error');
+                }
+                if (window.coplanReportError) {
+                  window.coplanReportError(
+                    'Limpar cenário fantasma', 'cenario_active_set',
+                    { error: String(
+                      (err && err.message) || err || '?') });
+                }
               });
             }
           } else {
             // Sincroniza UI com estado atual
             applyState(ativo, st);
           }
+        }).catch(function (err) {
+          console.warn('[coplan] cenario_active_get falhou:', err);
         });
       } else {
         return refreshActive();
@@ -27720,6 +27737,19 @@ COPLAN_BRIDGE_JS = """
             detail: { source: 'cenario:active_set' },
           }));
         });
+      }).catch(function (err) {
+        console.warn('[coplan] cenario_active_set falhou:', err);
+        if (typeof window.coplanToast === 'function') {
+          window.coplanToast(
+            'Falha ao trocar cenário: '
+            + ((err && err.message) || err || '?'),
+            'error');
+        }
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Trocar cenário ativo', 'cenario_active_set',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     });
   }
