@@ -28335,6 +28335,8 @@ COPLAN_BRIDGE_JS = """
         if (typeof window.coplanLoadObras === 'function') {
           window.coplanLoadObras();
         }
+      }).catch(function (e) {
+        toast('Erro: ' + (e && e.message || e), 'error');
       });
       return;
     }
