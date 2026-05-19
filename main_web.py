@@ -21470,7 +21470,22 @@ COPLAN_BRIDGE_JS = """
         }
         var api = window.pywebview && window.pywebview.api;
         if (!(api && api.resumo_ganhos_projeto)) return;
-        api.resumo_ganhos_projeto(nome).then(render);
+        api.resumo_ganhos_projeto(nome).then(render).catch(function (err) {
+          console.warn('[coplan] resumo_ganhos_projeto falhou:', err);
+          var msg = 'Falha ao carregar resumo do projeto: '
+            + ((err && err.message) || err || '?');
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast(msg, 'error');
+          }
+          if (window.coplanReportError) {
+            window.coplanReportError(
+              'Resumo de Ganhos por Projeto', 'resumo_ganhos_projeto',
+              { projeto: nome,
+                error: String((err && err.message) || err || '?') });
+          }
+          render({ok: false,
+                  error: (err && err.message) || String(err) || 'Falha ao carregar'});
+        });
       });
     }
     return true;
