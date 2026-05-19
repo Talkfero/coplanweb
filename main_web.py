@@ -22274,6 +22274,9 @@ COPLAN_BRIDGE_JS = """
           } else {
             out.textContent = 'Erro: ' + (r && r.error || 'invalido');
           }
+        }).catch(function (err) {
+          console.warn('[coplan/devtools] parse_cod_pep:', err);
+          out.textContent = 'Erro: ' + (err && err.message || err);
         });
       });
     }
@@ -22297,6 +22300,9 @@ COPLAN_BRIDGE_JS = """
           } else {
             out.textContent = 'Erro: ' + (r && r.error || '?');
           }
+        }).catch(function (err) {
+          console.warn('[coplan/devtools] resolve_pi_base:', err);
+          out.textContent = 'Erro: ' + (err && err.message || err);
         });
       });
     }
@@ -22343,7 +22349,13 @@ COPLAN_BRIDGE_JS = """
               aprovada_helper: (a && a.ok) ? a.aprovada : '?',
             };
             out.textContent = JSON.stringify(summary, null, 2);
+          }).catch(function (err) {
+            console.warn('[coplan/devtools] obra helpers:', err);
+            out.textContent = 'Erro: ' + (err && err.message || err);
           });
+        }).catch(function (err) {
+          console.warn('[coplan/devtools] get_obra:', err);
+          out.textContent = 'Erro: ' + (err && err.message || err);
         });
       });
     }
