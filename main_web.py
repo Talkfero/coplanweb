@@ -19160,6 +19160,9 @@ COPLAN_BRIDGE_JS = """
           if (r && r.ok && typeof window.coplanFillCadastroForm === 'function') {
             window.coplanFillCadastroForm(r.obra || {});
           }
+        }).catch(function (e) {
+          console.warn('[coplan/cadastro] get_obra navigation catch:', e);
+          toast('Falha ao carregar obra do projeto: ' + (e && e.message || e), 'error');
         });
       }
     }
@@ -19320,7 +19323,15 @@ COPLAN_BRIDGE_JS = """
         setBar(window.__coplanProjetoMode);
         toast('Atualizar Projeto: ' + rp.total + ' obra(s) carregada(s)',
               'info');
+      }).catch(function (e) {
+        console.warn('[coplan/cadastro] projeto_fetch_obras catch:', e);
+        toast('Falha ao listar obras do projeto: ' + (e && e.message || e),
+              'error');
       });
+    }).catch(function (e) {
+      console.warn('[coplan/cadastro] get_obra projeto catch:', e);
+      toast('Falha ao buscar obra para atualizar projeto: '
+            + (e && e.message || e), 'error');
     });
   };
   window.coplanGetProjetoMode = function () { return window.__coplanProjetoMode; };
