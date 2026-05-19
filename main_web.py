@@ -21873,6 +21873,14 @@ COPLAN_BRIDGE_JS = """
         } else {
           toast('Falha: ' + (r && r.error || '?'), 'error');
         }
+      }).catch(function (err) {
+        toast('Falha ao criar backup: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Backup do banco', 'db_backup',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     });
     bind('coplan-btn-db-weekly', function () {
@@ -21883,6 +21891,14 @@ COPLAN_BRIDGE_JS = """
           toast('Backup semanal salvo: ' + r.path, 'info');
         } else {
           toast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+      }).catch(function (err) {
+        toast('Falha ao criar backup semanal: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Backup semanal do banco', 'db_weekly_backup',
+            { error: String((err && err.message) || err || '?') });
         }
       });
     });
@@ -21898,6 +21914,14 @@ COPLAN_BRIDGE_JS = """
         } else {
           toast('Falha: ' + (r && r.error || '?'), 'error');
         }
+      }).catch(function (err) {
+        toast('Falha ao normalizar decimais: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Normalizar decimais', 'db_normalize_decimal',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     });
     bind('coplan-btn-db-last-mod', function () {
@@ -21908,6 +21932,14 @@ COPLAN_BRIDGE_JS = """
           window.alert('Ultima modificacao no banco:\\n\\n' + msg);
         } else {
           toast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+      }).catch(function (err) {
+        toast('Falha ao consultar ultima modificacao: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Ultima modificacao do banco', 'db_last_modification_info',
+            { error: String((err && err.message) || err || '?') });
         }
       });
     });
@@ -21921,6 +21953,16 @@ COPLAN_BRIDGE_JS = """
         } else {
           if (lbl) lbl.textContent = '';
           toast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+      }).catch(function (err) {
+        var lbl = card.querySelector('#coplan-admin-tecnico-count');
+        if (lbl) lbl.textContent = '';
+        toast('Falha ao contar tecnico_dirty: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Contar tecnico_dirty', 'db_count_tecnico_dirty',
+            { error: String((err && err.message) || err || '?') });
         }
       });
     });
@@ -21936,6 +21978,14 @@ COPLAN_BRIDGE_JS = """
         } else {
           toast('Falha: ' + (r && r.error || '?'), 'error');
         }
+      }).catch(function (err) {
+        toast('Falha ao marcar tecnico_dirty em todas: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Marcar todas tecnico_dirty', 'db_mark_tecnico_dirty_all',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     });
     bind('coplan-btn-cod-pep-pendentes', function () {
@@ -21950,6 +22000,14 @@ COPLAN_BRIDGE_JS = """
         } else {
           toast('Falha: ' + (r && r.error || '?'), 'error');
         }
+      }).catch(function (err) {
+        toast('Falha ao preencher COD_PEP pendentes: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Preencher COD_PEP pendentes', 'cod_pep_preencher_pendentes',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     });
     bind('coplan-btn-apoio-clear', function () {
@@ -21959,6 +22017,14 @@ COPLAN_BRIDGE_JS = """
       api.apoio_clear().then(function (r) {
         if (r && r.ok) toast('Cache do apoio limpo', 'info');
         else toast('Falha: ' + (r && r.error || '?'), 'error');
+      }).catch(function (err) {
+        toast('Falha ao limpar cache do apoio: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Limpar cache do apoio', 'apoio_clear',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     });
     return true;
