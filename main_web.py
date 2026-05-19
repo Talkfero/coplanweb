@@ -14748,6 +14748,8 @@ COPLAN_BRIDGE_JS = """
             } else {
               toast('Falha: ' + (r && r.error || '?'), 'error');
             }
+          }).catch(function (err) {
+            toast('Falha: ' + (err && err.message || err || '?'), 'error');
           });
         },
       });
@@ -14765,6 +14767,8 @@ COPLAN_BRIDGE_JS = """
                      : (r.atende === false ? 'error' : 'warn');
             var motivos = (r.motivos || []).join(', ');
             toast(label + (motivos ? ' (' + motivos + ')' : ''), lvl);
+          }).catch(function (err) {
+            toast('Falha: ' + (err && err.message || err || '?'), 'error');
           });
         },
       });
@@ -14783,6 +14787,8 @@ COPLAN_BRIDGE_JS = """
             } else {
               toast('Falha: ' + (r && r.error || '?'), 'error');
             }
+          }).catch(function (err) {
+            toast('Falha: ' + (err && err.message || err || '?'), 'error');
           });
         },
       });
@@ -14806,6 +14812,8 @@ COPLAN_BRIDGE_JS = """
             } else {
               toast('Falha: ' + (r && r.error || '?'), 'error');
             }
+          }).catch(function (err) {
+            toast('Falha: ' + (err && err.message || err || '?'), 'error');
           });
         },
       });
@@ -14862,6 +14870,8 @@ COPLAN_BRIDGE_JS = """
               catch (e) { toast('Falha ao copiar', 'error'); }
             };
             if (window.lucide) lucide.createIcons();
+          }).catch(function (err) {
+            toast('Falha: ' + (err && err.message || err || '?'), 'error');
           });
         },
       });
@@ -14904,6 +14914,8 @@ COPLAN_BRIDGE_JS = """
               toast('Falha: ' + ((r && r.erros || ['?']).slice(0,2).join('; ')),
                     'error');
             }
+          }).catch(function (err) {
+            toast('Falha: ' + (err && err.message || err || '?'), 'error');
           });
         },
       });
