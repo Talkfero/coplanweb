@@ -22280,6 +22280,18 @@ COPLAN_BRIDGE_JS = """
       } else if (r && r.error && typeof window.coplanToast === 'function') {
         window.coplanToast('Erro: ' + r.error, 'error');
       }
+    }).catch(function (err) {
+      if (typeof window.coplanToast === 'function') {
+        window.coplanToast(
+          'Falha ao salvar Criterios: '
+          + ((err && err.message) || err || '?'),
+          'error');
+      }
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Salvar Criterios', 'save_criterios',
+          { error: String((err && err.message) || err || '?') });
+      }
     });
   }
   window.coplanSaveCriterios = saveCriterios;
@@ -22291,7 +22303,19 @@ COPLAN_BRIDGE_JS = """
   window.coplanLoadConfigCriterios = function () {
     var api = window.pywebview && window.pywebview.api;
     if (!(api && api.get_criterios)) return Promise.resolve();
-    return api.get_criterios().then(applyAndCache);
+    return api.get_criterios().then(applyAndCache).catch(function (err) {
+      if (typeof window.coplanToast === 'function') {
+        window.coplanToast(
+          'Falha ao carregar Criterios: '
+          + ((err && err.message) || err || '?'),
+          'error');
+      }
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Carregar Criterios', 'get_criterios',
+          { error: String((err && err.message) || err || '?') });
+      }
+    });
   };
 
   function bindRestore(card) {
@@ -22311,6 +22335,18 @@ COPLAN_BRIDGE_JS = """
             }
             if (typeof window.coplanLoadObras === 'function') {
               window.coplanLoadObras();
+            }
+          }).catch(function (err) {
+            if (typeof window.coplanToast === 'function') {
+              window.coplanToast(
+                'Falha ao restaurar Criterios: '
+                + ((err && err.message) || err || '?'),
+                'error');
+            }
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Restaurar Criterios', 'restore_criterios_defaults',
+                { error: String((err && err.message) || err || '?') });
             }
           });
         });
