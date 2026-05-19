@@ -27924,9 +27924,27 @@ COPLAN_BRIDGE_JS = """
               return;
             }
             startReload(r.path);
+          }).catch(function (err) {
+            console.warn('[coplan] pick_apoio_file falhou:', err);
+            toast('Falha ao escolher planilha: '
+              + ((err && err.message) || err || '?'), 'error');
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Escolher planilha de apoio', 'pick_apoio_file',
+                { error: String((err && err.message) || err || '?') });
+            }
           });
         }
         startReload('');  // usa last_path
+      }).catch(function (err) {
+        console.warn('[coplan] apoio_meta falhou:', err);
+        toast('Falha ao consultar apoio: '
+          + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Consultar metadados de apoio', 'apoio_meta',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     });
   }
@@ -27970,6 +27988,18 @@ COPLAN_BRIDGE_JS = """
           }
           toast('Falha ao iniciar: ' + (st.error || '?'), 'error');
         }
+      }).catch(function (err) {
+        console.warn('[coplan] apoio_reload_from_xlsx_async falhou:', err);
+        if (window.coplanProgress && window.coplanProgress.close) {
+          window.coplanProgress.close();
+        }
+        toast('Falha ao atualizar apoio: '
+          + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Atualizar apoio', 'apoio_reload_from_xlsx_async',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
     } else {
       // Fallback sem modal de progresso (sincrono)
@@ -27981,6 +28011,15 @@ COPLAN_BRIDGE_JS = """
           document.dispatchEvent(new CustomEvent('coplan:apoio-changed'));
         } else {
           toast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+      }).catch(function (err) {
+        console.warn('[coplan] apoio_reload_from_xlsx falhou:', err);
+        toast('Falha ao atualizar apoio: '
+          + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Atualizar apoio', 'apoio_reload_from_xlsx',
+            { error: String((err && err.message) || err || '?') });
         }
       });
     }
