@@ -10678,6 +10678,19 @@ COPLAN_BRIDGE_JS = """
             && window.pywebview.api.header_connect_db) {
           window.pywebview.api.header_connect_db().then(function () {
             if (window.coplanRefreshChips) window.coplanRefreshChips();
+          }).catch(function (err) {
+            console.warn('goToSource(db) falhou:', err);
+            if (typeof window.coplanToast === 'function') {
+              window.coplanToast(
+                'Falha ao conectar Banco: '
+                + ((err && err.message) || err || '?'),
+                'error');
+            }
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Ir para Banco', 'header_connect_db',
+                { error: String((err && err.message) || err || '?') });
+            }
           });
         }
       }, 200);
@@ -10690,6 +10703,19 @@ COPLAN_BRIDGE_JS = """
             && window.pywebview.api.pick_and_load_apoio) {
           window.pywebview.api.pick_and_load_apoio().then(function () {
             if (window.coplanRefreshChips) window.coplanRefreshChips();
+          }).catch(function (err) {
+            console.warn('goToSource(apoio) falhou:', err);
+            if (typeof window.coplanToast === 'function') {
+              window.coplanToast(
+                'Falha ao carregar Apoio: '
+                + ((err && err.message) || err || '?'),
+                'error');
+            }
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Ir para Apoio', 'pick_and_load_apoio',
+                { error: String((err && err.message) || err || '?') });
+            }
           });
         }
       }, 200);
@@ -10702,6 +10728,19 @@ COPLAN_BRIDGE_JS = """
             && window.pywebview.api.pick_ganhos_folder) {
           window.pywebview.api.pick_ganhos_folder().then(function () {
             if (window.coplanRefreshChips) window.coplanRefreshChips();
+          }).catch(function (err) {
+            console.warn('goToSource(ganhos) falhou:', err);
+            if (typeof window.coplanToast === 'function') {
+              window.coplanToast(
+                'Falha ao carregar Ganhos: '
+                + ((err && err.message) || err || '?'),
+                'error');
+            }
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Ir para Ganhos', 'pick_ganhos_folder',
+                { error: String((err && err.message) || err || '?') });
+            }
           });
         }
       }, 200);
