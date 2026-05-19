@@ -18571,6 +18571,13 @@ COPLAN_BRIDGE_JS = """
               if (typeof window.coplanLoadObras === 'function') {
                 window.coplanLoadObras();
               }
+            }).catch(function (err) {
+              toast('Falhou: ' + (err && err.message || err || '?'), 'error');
+              if (window.coplanReportError) {
+                window.coplanReportError(
+                  'Excluir obra ' + cod, 'delete_obras',
+                  { error: String(err && err.message || err || '?') });
+              }
             });
           }
           break;
