@@ -15340,6 +15340,18 @@ COPLAN_BRIDGE_JS = """
         }
       }
       return r;
+    }).catch(function (err) {
+      if (typeof window.coplanToast === 'function') {
+        window.coplanToast(
+          'Falha ao salvar obra: ' + (err && err.message || err || '?'),
+          'error');
+      }
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Salvar Obra', 'save_obra',
+          { error: String(err && err.message || err || '?') });
+      }
+      return { ok: false, error: String(err && err.message || err || '?') };
     });
   };
 
