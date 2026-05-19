@@ -28340,6 +28340,16 @@ COPLAN_BRIDGE_JS = """
               + ' style="padding:5px 10px;cursor:pointer;border-bottom:1px solid var(--border);"'
               + ' title="Clique para inserir {' + safe + '}">' + safe + '</div>';
         }).join('');
+      }).catch(function (err) {
+        box.innerHTML = '<div style="padding:12px;color:var(--text-soft);">'
+                      + 'Falha ao carregar campos.</div>';
+        toast('Falha ao carregar campos: '
+              + (err && err.message || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Carregar campos de template', 'get_template_field_candidates',
+            { error: String(err && err.message || err || '?') });
+        }
       });
     },
 
@@ -28379,6 +28389,14 @@ COPLAN_BRIDGE_JS = """
         if (prev && out.indexOf(prev) >= 0) sel.value = prev;
         else if (out.length) sel.value = out[0];
         T.state.pi = sel.value || '';
+      }).catch(function (err) {
+        toast('Falha ao carregar lista de PIs: '
+              + (err && err.message || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Carregar lista de PIs (templates)', 'get_templates',
+            { error: String(err && err.message || err || '?') });
+        }
       });
     },
 
@@ -28396,6 +28414,15 @@ COPLAN_BRIDGE_JS = """
       }
       return a.get_descricao_template(p).then(function (r) {
         ta.value = (r && r.template) || '';
+      }).catch(function (err) {
+        ta.value = '';
+        toast('Falha ao carregar template: '
+              + (err && err.message || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Carregar template ' + p, 'get_descricao_template',
+            { error: String(err && err.message || err || '?') });
+        }
       });
     },
 
@@ -28426,6 +28453,14 @@ COPLAN_BRIDGE_JS = """
       }).then(function (rr) {
         if (rr && rr.ok) toast('Template salvo para ' + pi + '.', 'success');
         else toast('Erro ao salvar: ' + ((rr && rr.error) || ''), 'error');
+      }).catch(function (err) {
+        toast('Falha ao salvar template: '
+              + (err && err.message || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Salvar Template ' + pi, 'save_templates',
+            { error: String(err && err.message || err || '?') });
+        }
       });
     },
 
@@ -28445,6 +28480,14 @@ COPLAN_BRIDGE_JS = """
         } else {
           toast('Erro: ' + ((r && r.error) || ''), 'error');
         }
+      }).catch(function (err) {
+        toast('Falha ao restaurar template: '
+              + (err && err.message || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Restaurar Template ' + pi, 'delete_pi_template',
+            { error: String(err && err.message || err || '?') });
+        }
       });
     },
 
@@ -28461,6 +28504,14 @@ COPLAN_BRIDGE_JS = """
           if (sel && sel.value) T.loadTemplate(sel.value);
         } else {
           toast('Erro: ' + ((r && r.error) || ''), 'error');
+        }
+      }).catch(function (err) {
+        toast('Falha ao restaurar todos os templates: '
+              + (err && err.message || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Restaurar todos os templates', 'restore_all_templates',
+            { error: String(err && err.message || err || '?') });
         }
       });
     },
@@ -28486,6 +28537,15 @@ COPLAN_BRIDGE_JS = """
           pv.value = (r.rendered || '(template vazio)') + '\\n\\n' + hint;
         } else {
           pv.value = 'Erro: ' + ((r && r.error) || '');
+        }
+      }).catch(function (err) {
+        var msg = String(err && err.message || err || '?');
+        pv.value = 'Falha ao renderizar preview: ' + msg;
+        toast('Falha ao renderizar preview: ' + msg, 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Preview Template ' + pi, 'template_preview_render',
+            { error: msg });
         }
       });
     }
