@@ -12933,6 +12933,13 @@ COPLAN_BRIDGE_JS = """
             if (typeof window.coplanLoadObras === 'function') {
               window.coplanLoadObras();
             }
+          }).catch(function (err) {
+            toast('Falhou: ' + (err && err.message || err || '?'), 'error');
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Excluir obras', 'delete_obras',
+                { error: String(err && err.message || err || '?') });
+            }
           });
         };
         if (!api.gate_aprovadas_for_action) {
@@ -14876,6 +14883,13 @@ COPLAN_BRIDGE_JS = """
               }
             }
             if (window.coplanLoadObras) window.coplanLoadObras();
+          }).catch(function (err) {
+            toast('Falhou: ' + (err && err.message || err || '?'), 'error');
+            if (window.coplanReportError) {
+              window.coplanReportError(
+                'Excluir obras', 'delete_obras',
+                { error: String(err && err.message || err || '?') });
+            }
           });
         },
       });
