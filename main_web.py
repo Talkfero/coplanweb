@@ -21593,6 +21593,18 @@ COPLAN_BRIDGE_JS = """
     return api.get_config_empresa().then(function (s) {
       window.__coplanConfigEmpresa = s;
       applyEmpresa(s);
+    }).catch(function (err) {
+      if (typeof window.coplanToast === 'function') {
+        window.coplanToast(
+          'Falha ao carregar Empresa: '
+          + ((err && err.message) || err || '?'),
+          'error');
+      }
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Carregar Empresa', 'get_config_empresa',
+          { error: String((err && err.message) || err || '?') });
+      }
     });
   };
 
@@ -21621,12 +21633,24 @@ COPLAN_BRIDGE_JS = """
             window.__coplanState = st;
             document.dispatchEvent(new CustomEvent('coplan:state',
               { detail: st }));
-          });
+          }).catch(function () {});
         }
       } else if (r && r.error) {
         if (typeof window.coplanToast === 'function') {
           window.coplanToast('Erro: ' + r.error, 'error');
         }
+      }
+    }).catch(function (err) {
+      if (typeof window.coplanToast === 'function') {
+        window.coplanToast(
+          'Falha ao salvar Empresa: '
+          + ((err && err.message) || err || '?'),
+          'error');
+      }
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Salvar Empresa', 'save_config_empresa',
+          { error: String((err && err.message) || err || '?') });
       }
     });
   }
@@ -21670,6 +21694,18 @@ COPLAN_BRIDGE_JS = """
         } else if (r && r.error && r.error !== 'cancelado'
                    && typeof window.coplanToast === 'function') {
           window.coplanToast('Erro: ' + r.error, 'error');
+        }
+      }).catch(function (err) {
+        if (typeof window.coplanToast === 'function') {
+          window.coplanToast(
+            'Falha ao abrir seletor: '
+            + ((err && err.message) || err || '?'),
+            'error');
+        }
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Procurar (' + labelPrefix + ')', apiMethod,
+            { error: String((err && err.message) || err || '?') });
         }
       });
     });
