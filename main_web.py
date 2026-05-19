@@ -15821,12 +15821,12 @@ COPLAN_BRIDGE_JS = """
   function loadAlimentadoresIntoSelect() {
     var card = getCard();
     var sel = getSelect(card);
-    if (!sel) return;
+    if (!sel) return Promise.resolve();
     if (!(window.pywebview && window.pywebview.api &&
           window.pywebview.api.list_alimentadores)) {
-      return;
+      return Promise.resolve();
     }
-    window.pywebview.api.list_alimentadores().then(function (r) {
+    return window.pywebview.api.list_alimentadores().then(function (r) {
       if (!r || !r.ok) return;
       // Mantem opcao placeholder "—" + lista alfabetica.
       var prevValue = sel.value;
@@ -15895,7 +15895,18 @@ COPLAN_BRIDGE_JS = """
     function ensureLoaded() {
       if (loaded) return;
       loaded = true;
-      loadAlimentadoresIntoSelect();
+      var p = loadAlimentadoresIntoSelect();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function (e) {
+          loaded = false;
+          console.warn('[coplan/cadastro] list_alimentadores catch:', e);
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast(
+              'Falha ao carregar alimentadores: '
+              + (e && e.message || e), 'error');
+          }
+        });
+      }
     }
     document.addEventListener('coplan:tab', function (ev) {
       if (ev && ev.detail && ev.detail.name === 'cadastro') ensureLoaded();
