@@ -20442,12 +20442,36 @@ COPLAN_BRIDGE_JS = """
           } else if (resp && resp.error && typeof window.coplanToast === 'function') {
             window.coplanToast('Erro: ' + resp.error, 'error');
           }
+        }).catch(function (err) {
+          if (typeof window.coplanToast === 'function') {
+            window.coplanToast(
+              'Falha ao aplicar Ganhos na obra: '
+              + ((err && err.message) || err || '?'),
+              'error');
+          }
+          if (window.coplanReportError) {
+            window.coplanReportError(
+              'Aplicar Ganhos na obra', 'apply_ganhos_to_obra',
+              { error: String((err && err.message) || err || '?') });
+          }
         });
       } else {
         if (typeof window.coplanToast === 'function') {
           window.coplanToast(parametros.length + ' parametros carregados (preview); '
                            + 'sem obra em foco para persistir.', 'warn');
         }
+      }
+    }).catch(function (err) {
+      if (typeof window.coplanToast === 'function') {
+        window.coplanToast(
+          'Falha ao carregar arquivo de Ganhos: '
+          + ((err && err.message) || err || '?'),
+          'error');
+      }
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Carregar arquivo de Ganhos', 'pick_ganhos_file',
+          { error: String((err && err.message) || err || '?') });
       }
     });
   }
@@ -20492,7 +20516,31 @@ COPLAN_BRIDGE_JS = """
         }
         // Recarrega lista da Visualizar para refletir mudancas.
         if (typeof window.coplanLoadObras === 'function') window.coplanLoadObras();
+      }).catch(function (err) {
+        if (typeof window.coplanToast === 'function') {
+          window.coplanToast(
+            'Falha ao aplicar Ganhos em massa: '
+            + ((err && err.message) || err || '?'),
+            'error');
+        }
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Aplicar Ganhos em massa', 'ganhos_em_massa',
+            { error: String((err && err.message) || err || '?') });
+        }
       });
+    }).catch(function (err) {
+      if (typeof window.coplanToast === 'function') {
+        window.coplanToast(
+          'Falha ao carregar arquivo de Ganhos (massa): '
+          + ((err && err.message) || err || '?'),
+          'error');
+      }
+      if (window.coplanReportError) {
+        window.coplanReportError(
+          'Carregar arquivo de Ganhos (massa)', 'pick_ganhos_file',
+          { error: String((err && err.message) || err || '?') });
+      }
     });
   }
 
