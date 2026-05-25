@@ -8,11 +8,12 @@ REPO_ROOT = SPEC_DIR.parent.parent
 
 APP_NAME = "Coplan"
 ENTRYPOINT = str(SPEC_DIR / "coplan_launcher.py")
-ICON = str(REPO_ROOT / "cadastro-de-obras.ico")
+ICON = str(REPO_ROOT / "frontend" / "assets" / "cadastro-de-obras.ico")
 
 datas = [
-    (str(REPO_ROOT / "Coplan UI.html"), "."),
-    (str(REPO_ROOT / "cadastro-de-obras.ico"), "."),
+    # Bundla a pasta frontend inteira (index.html + js/coplan_bridge.js + assets)
+    # preservando a estrutura; coplan_launcher.py reaponta HTML_FILE/BRIDGE_JS_FILE.
+    (str(REPO_ROOT / "frontend"), "frontend"),
 ]
 
 hiddenimports = [

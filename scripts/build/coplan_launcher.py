@@ -47,18 +47,23 @@ def _unblock_motw(root: Path) -> None:
 
 
 def _patch_paths() -> None:
-    """Point `HTML_FILE` at the bundled asset inside `_MEIPASS`."""
+    """Point `HTML_FILE`/`BRIDGE_JS_FILE` at the bundled `frontend/` inside `_MEIPASS`."""
     meipass = getattr(sys, "_MEIPASS", None)
     if not meipass:
         return
 
-    bundle_dir = Path(meipass)
-    html_path = bundle_dir / "Coplan UI.html"
+    frontend_dir = Path(meipass) / "frontend"
+    html_path = frontend_dir / "index.html"
+    bridge_path = frontend_dir / "js" / "coplan_bridge.js"
 
     import main_web  # noqa: PLC0415 -- imported after sys.path is set by PyInstaller
 
+    if frontend_dir.exists():
+        main_web.FRONTEND_DIR = frontend_dir
     if html_path.exists():
         main_web.HTML_FILE = html_path
+    if bridge_path.exists():
+        main_web.BRIDGE_JS_FILE = bridge_path
 
 
 def main() -> None:

@@ -1,18 +1,24 @@
 # Diretrizes do projeto Coplan Web
 
 > Escopo deste arquivo: a **aplicação WEB** (`main_web.py` + `runtime/`,
-> `core/`, `data_access_layer.py`, `ui_helpers.py`, `texto_utils.py`,
-> `Coplan UI.html`). O desktop (`codigo5_coplan.py`, `ui/main_window/*_mixin.py`,
-> PySide6) é legado reaproveitado como biblioteca de managers; não é o foco aqui.
+> `core/`, `ui_helpers.py`, `texto_utils.py`, e a pasta `frontend/`). O desktop
+> (`codigo5_coplan.py`, `ui/main_window/*_mixin.py`, PySide6) é legado
+> reaproveitado como biblioteca de managers; não é o foco aqui.
+>
+> **Layout de pastas**: a raiz contém só `main_web.py` (entrypoint) + módulos
+> Python compartilhados. O front-end vive em `frontend/` (`index.html`,
+> `js/coplan_bridge.js`, `assets/`). Docs em `docs/`, scripts de build em
+> `scripts/build/`.
 
 ## Arquitetura (web)
 
 - **Framework**: `pywebview` (não é Flask/FastAPI). Entrypoint em
-  `main_web.py:main()` (`main_web.py:29955`), que cria a janela
-  (`webview.create_window`, `main_web.py:29973`) e inicia com
+  `main_web.py:main()`, que cria a janela (`webview.create_window`) e inicia com
   `webview.start(debug=debug)`.
-- **Front-end**: `Coplan UI.html` (single-page HTML/CSS/JS). O JS é injetado em
-  memória (bridge `window.coplanBridge`) e chama o backend via
+- **Front-end**: `frontend/index.html` (HTML/CSS + JS de UX básico). A camada de
+  UI em JavaScript fica em `frontend/js/coplan_bridge.js` e é injetada em memória
+  por `build_html()` (lê o HTML + o JS do disco e anexa o JS antes de `</body>`;
+  nunca modifica os arquivos). O JS chama o backend via
   `window.pywebview.api.<metodo>()`.
 - **Backend**: classe `CoplanApi` (`main_web.py:126`). Todos os métodos públicos
   são expostos ao JS via `js_api`. Managers do legado (`DatabaseManager`,
@@ -20,9 +26,10 @@
   forma **lazy** em `_ensure_managers()`, com locks para thread-safety. Não
   importe esses managers no topo do módulo — siga o padrão lazy/local import.
 - **Banco**: SQLite. Tabela principal `obras`. Caminho vem de `config.json`
-  (`["obras"]`). `data_access_layer.py` provê cache em memória das obras
-  (`DataAccessLayer`: `load_cache`, `get_rows`, `get_by_cod`,
-  `count_tecnico_dirty`, etc.), ordenando por `ano_, nome_projeto, codigo_item`.
+  (`["obras"]`). A camada de acesso é `core/repositories/obra_read_repo.py`
+  (`ObraReadRepo`, aliased como `DataAccessLayer`): cache em memória das obras
+  (`load_cache`, `get_rows`, `get_by_cod`, `count_tecnico_dirty`, etc.),
+  ordenando por `ano_, nome_projeto, codigo_item`.
 
 ## Como rodar
 

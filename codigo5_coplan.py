@@ -384,6 +384,7 @@ class MainWindow(
         # Ícone do aplicativo (quando disponível localmente)
         try:
             icon_candidates = [
+                os.path.join(MODULE_DIR, "frontend", "assets", "cadastro-de-obras.ico"),
                 os.path.join(MODULE_DIR, "cadastro-de-obras.ico"),
                 os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "cadastro-de-obras.ico"),
             ]

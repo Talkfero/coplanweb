@@ -63,8 +63,10 @@ WebView2 e o app trava na inicializacao.
 
 ### Paths patch
 
-O launcher tambem reaponta `main_web.HTML_FILE` para o `Coplan UI.html`
-extraido em `sys._MEIPASS`. O HTML e empacotado como `datas` no `.spec`.
+O launcher tambem reaponta `main_web.FRONTEND_DIR`/`HTML_FILE`/`BRIDGE_JS_FILE`
+para a pasta `frontend/` (`index.html` + `js/coplan_bridge.js` + `assets/`)
+extraida em `sys._MEIPASS`. A pasta `frontend/` inteira e empacotada como
+`datas` no `.spec`.
 
 `ConfigManager.CONFIG_FILE` **nao** e patchado: continua resolvendo via
 `%LOCALAPPDATA%\COPLAN\config\config.json` tanto no .exe quanto rodando
