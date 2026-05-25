@@ -21,7 +21,10 @@ import textwrap
 from typing import Any, Dict
 
 import pandas as pd
-from PySide6 import QtWidgets
+try:  # Qt e' opcional: a app web (headless) nao instala PySide6.
+    from PySide6 import QtWidgets  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # os caminhos que usam QtWidgets so rodam no desktop
+    QtWidgets = None  # type: ignore[assignment]
 
 from runtime.apoio import SupportFileManager, read_excel_cached
 from runtime.config import REGIONAL_MAP, ORDERED_COLUMNS, ConfigManager
@@ -59,7 +62,7 @@ def get_pi_metadata_map(config: dict | None = None) -> dict[str, dict]:
     Reproduz fielmente a logica do legado (que usa ``setdefault`` para nao
     sobrescrever entrada por nome com a entrada por tipo_base).
     """
-    from texto_utils import normalize_key
+    from shared.texto_utils import normalize_key
     mapping: dict[str, dict] = {}
     for entry in get_pi_metadata_entries(config):
         nome_key = normalize_key(str(entry.get("nome") or ""))
@@ -161,7 +164,7 @@ class CalculationManager:
         anteriormente.
         """
         # get_pi_base permanece em codigo5_coplan (depende de PI_BASE_MAP/Qt prompt).
-        from codigo5_coplan import get_pi_base
+        from runtime.pi_base import get_pi_base  # noqa: PLC0415
 
         pacote_str = pacote.strip().upper()
         mapping = {
@@ -820,7 +823,7 @@ class CalculationManager:
 
     def calcular_contas_contratos_beneficiadas(self, data_topologia, data_confiabilidade, alimentadores_considerados, projeto_investimento):
         """Calcula somatório das Contas Contratos Beneficiadas para todos os alimentadores."""
-        from codigo5_coplan import get_pi_base
+        from runtime.pi_base import get_pi_base  # noqa: PLC0415
 
         total_contas_beneficiadas = 0
 

@@ -613,7 +613,8 @@ class CsvReportDialog(QtWidgets.QDialog):
     def export_csv(self):
         # Lazy imports (require_tecnico_clean_or_confirm e exportar_relatorio_csv
         # ainda moram em codigo5_coplan).
-        from codigo5_coplan import exportar_relatorio_csv, require_tecnico_clean_or_confirm
+        from runtime.file_io import exportar_relatorio_csv  # noqa: PLC0415
+        from runtime.row_helpers import require_tecnico_clean_or_confirm  # noqa: PLC0415
 
         if not require_tecnico_clean_or_confirm(
             self, self.db_manager, "Exportar CSV"
@@ -632,7 +633,7 @@ class CsvReportDialog(QtWidgets.QDialog):
                 QtWidgets.QMessageBox.critical(self, "Erro", "Não foi possível exportar o relatório CSV.")
 
     def import_csv(self):
-        from codigo5_coplan import carregar_relatorio_csv
+        from runtime.file_io import carregar_relatorio_csv  # noqa: PLC0415
 
         origem, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Importar CSV", "", "Arquivos CSV (*.csv)")
         if origem:

@@ -12,6 +12,7 @@ dist/
 
 # Logs gerados pelo coplan web (modal de detalhes)
 logs/
+*.log
 
 # IDE / SO
 .vscode/

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from texto_utils import _compact_key, normalize_key
+from shared.texto_utils import _compact_key, normalize_key
 
 
 def normalize_description(text: Any) -> str:

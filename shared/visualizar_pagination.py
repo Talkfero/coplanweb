@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from ui_helpers import paginate_items
+from shared.ui_helpers import paginate_items
 
 
 def paginate_visualizar_rows(

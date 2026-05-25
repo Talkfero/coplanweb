@@ -1,4 +1,7 @@
 pywebview
 pandas
 openpyxl
-PySide6
+# PySide6 NAO e' mais necessario para a app web: os modulos runtime.* usados
+# pela web importam Qt de forma lazy/guardada e os caminhos Qt (dialogos,
+# worker em QThread) so rodam no desktop. O desktop (codigo5_coplan/ui) ainda
+# requer PySide6 -- instale-o separadamente para rodar o app desktop.

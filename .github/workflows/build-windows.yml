@@ -21,7 +21,7 @@ jobs:
       - name: Build Coplan.exe
         shell: pwsh
         run: |
-          ./_nina_ceo/builds/build_windows_exe.ps1
+          ./scripts/build/build_windows_exe.ps1
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

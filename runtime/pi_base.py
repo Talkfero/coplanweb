@@ -12,7 +12,10 @@ Inclui:
 """
 from __future__ import annotations
 
-from PySide6 import QtWidgets
+try:  # Qt e' opcional: a app web (headless) nao instala PySide6.
+    from PySide6 import QtWidgets  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # o ramo prompt_user=True (QInputDialog) so roda no desktop
+    QtWidgets = None  # type: ignore[assignment]
 
 from runtime.calc import get_pi_metadata, get_pi_tipo_base
 from runtime.config import ConfigManager

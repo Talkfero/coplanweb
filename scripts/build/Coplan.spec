@@ -3,16 +3,19 @@
 
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_submodules
+
 SPEC_DIR = Path(SPECPATH).resolve()
 REPO_ROOT = SPEC_DIR.parent.parent
 
 APP_NAME = "Coplan"
 ENTRYPOINT = str(SPEC_DIR / "coplan_launcher.py")
-ICON = str(REPO_ROOT / "cadastro-de-obras.ico")
+ICON = str(REPO_ROOT / "frontend" / "assets" / "cadastro-de-obras.ico")
 
 datas = [
-    (str(REPO_ROOT / "Coplan UI.html"), "."),
-    (str(REPO_ROOT / "cadastro-de-obras.ico"), "."),
+    # Bundla a pasta frontend inteira (index.html + js/coplan_bridge.js + assets)
+    # preservando a estrutura; coplan_launcher.py reaponta HTML_FILE/BRIDGE_JS_FILE.
+    (str(REPO_ROOT / "frontend"), "frontend"),
 ]
 
 hiddenimports = [
@@ -24,10 +27,20 @@ hiddenimports = [
     "pythonnet",
     "pandas",
     "openpyxl",
-    "PySide6",
-    "PySide6.QtCore",
-    "PySide6.QtWidgets",
-    "PySide6.QtGui",
+    # PySide6 removido: a app web e' Qt-free (imports de Qt em runtime.* sao
+    # lazy/guardados e so executam no desktop). Ver excludes abaixo.
+]
+
+# main_web importa backend/core/shared/runtime de forma lazy (dentro dos
+# metodos), o que a analise estatica do PyInstaller nao segue. Coleta explicita
+# garante que esses pacotes entrem no bundle do exe web. Para runtime/ listamos
+# so os modulos que a web usa (os demais sao Qt-only do desktop e ficam de fora).
+for _pkg in ("backend", "core", "shared"):
+    hiddenimports += collect_submodules(_pkg)
+hiddenimports += [
+    "runtime.config", "runtime.text_utils", "runtime.pi_base", "runtime.calc",
+    "runtime.database", "runtime.apoio", "runtime.file_io", "runtime.row_helpers",
+    "runtime.notify",
 ]
 
 a = Analysis(
@@ -39,7 +52,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["PyQt5", "PyQt6"],
+    excludes=["PyQt5", "PyQt6", "PySide6"],
     noarchive=False,
     optimize=0,
 )

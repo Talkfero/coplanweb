@@ -1,33 +1,48 @@
 # Diretrizes do projeto Coplan Web
 
-> Escopo deste arquivo: a **aplicação WEB** (`main_web.py` + `runtime/`,
-> `core/`, `data_access_layer.py`, `ui_helpers.py`, `texto_utils.py`,
-> `Coplan UI.html`). O desktop (`codigo5_coplan.py`, `ui/main_window/*_mixin.py`,
-> PySide6) é legado reaproveitado como biblioteca de managers; não é o foco aqui.
+> Escopo deste arquivo: a **aplicação WEB** (`main_web.py` + `backend/`,
+> `runtime/`, `core/`, `shared/`, e a pasta `frontend/`).
+> O desktop (`legacy_desktop/codigo5_coplan.py`, `legacy_desktop/ui/*_mixin.py`,
+> PySide6) é legado e **não** é mais importado pela web; não é o foco aqui.
+>
+> **Layout de pastas**: a raiz contém só `main_web.py` (entrypoint) + pastas:
+> `backend/` (`api.py`, `_state.py`, `domains/*.py`), `core/`, `runtime/`,
+> `shared/` (utils puros: `ui_helpers.py`, `texto_utils.py`,
+> `visualizar_pagination.py`), `frontend/` (`index.html`, `js/coplan_bridge.js`,
+> `assets/`), `legacy_desktop/` (desktop Qt legado), `docs/`, `scripts/build/`.
 
 ## Arquitetura (web)
 
 - **Framework**: `pywebview` (não é Flask/FastAPI). Entrypoint em
-  `main_web.py:main()` (`main_web.py:29955`), que cria a janela
-  (`webview.create_window`, `main_web.py:29973`) e inicia com
+  `main_web.py:main()`, que cria a janela (`webview.create_window`) e inicia com
   `webview.start(debug=debug)`.
-- **Front-end**: `Coplan UI.html` (single-page HTML/CSS/JS). O JS é injetado em
-  memória (bridge `window.coplanBridge`) e chama o backend via
+- **Front-end**: `frontend/index.html` (HTML/CSS + JS de UX básico). A camada de
+  UI em JavaScript fica em `frontend/js/coplan_bridge.js` e é injetada em memória
+  por `build_html()` (lê o HTML + o JS do disco e anexa o JS antes de `</body>`;
+  nunca modifica os arquivos). O JS chama o backend via
   `window.pywebview.api.<metodo>()`.
-- **Backend**: classe `CoplanApi` (`main_web.py:126`). Todos os métodos públicos
-  são expostos ao JS via `js_api`. Managers do legado (`DatabaseManager`,
-  `SupportFileManager`, `CalculationManager`, `ConfigManager`) são carregados de
-  forma **lazy** em `_ensure_managers()`, com locks para thread-safety. Não
-  importe esses managers no topo do módulo — siga o padrão lazy/local import.
+- **Backend**: classe `CoplanApi` em `backend/api.py`, **composta por mixins de
+  domínio** em `backend/domains/*.py` (`core`, `obras`, `apoio`, `valor`,
+  `cadastro`, `tecnico`, `ganhos`, `criterios`, `resumos`, `config`, `banco`,
+  `calc`, `nota_colapso`, `cenarios`, `validacoes`). `CoreMixin` (vem primeiro no
+  MRO) tem o `__init__`, o estado de sessão e as constantes de classe. Estado de
+  módulo compartilhado (progress `_OP_*`, `APP_VERSION`, `HERE`) está em
+  `backend/_state.py`. Todos os métodos públicos (sem `_`) são expostos ao JS via
+  `js_api` — **os nomes são o contrato com o front; não renomeie ao reorganizar**.
+  Managers do legado (`DatabaseManager`, `SupportFileManager`,
+  `CalculationManager`, `ConfigManager`) são carregados de forma **lazy** em
+  `_ensure_managers()` (`backend/domains/core.py`), com locks para thread-safety.
+  Mantenha o padrão lazy/local import dentro dos métodos.
 - **Banco**: SQLite. Tabela principal `obras`. Caminho vem de `config.json`
-  (`["obras"]`). `data_access_layer.py` provê cache em memória das obras
-  (`DataAccessLayer`: `load_cache`, `get_rows`, `get_by_cod`,
-  `count_tecnico_dirty`, etc.), ordenando por `ano_, nome_projeto, codigo_item`.
+  (`["obras"]`). A camada de acesso é `core/repositories/obra_read_repo.py`
+  (`ObraReadRepo`, aliased como `DataAccessLayer`): cache em memória das obras
+  (`load_cache`, `get_rows`, `get_by_cod`, `count_tecnico_dirty`, etc.),
+  ordenando por `ano_, nome_projeto, codigo_item`.
 
 ## Como rodar
 
 ```bash
-pip install -r requirements-web.txt   # pywebview, pandas, openpyxl, PySide6
+pip install -r requirements-web.txt   # pywebview, pandas, openpyxl (SEM PySide6)
 python main_web.py
 ```
 
@@ -41,17 +56,20 @@ inline (`# noqa: BLE001`, `# noqa: PLC0415`, `# noqa: E731`).
   `{"ok": bool, "error": str, ...}`. Mantenha esse formato; o front depende dele.
   Nunca deixe exceção vazar para o bridge — capture e retorne `{"ok": False,
   "error": ...}` (`# noqa: BLE001` é o padrão aceito para o except amplo).
-- **Imports locais/lazy** dentro dos métodos para módulos do legado
-  (`from codigo5_coplan import ...  # type: ignore[import-not-found]`,
-  `# noqa: PLC0415`). Evita custo de Qt/SQLite no import e quebra de
-  dependência opcional.
+- **Imports locais/lazy** dentro dos métodos para os managers/helpers do
+  legado. Importe **direto de `runtime.*`/`core.*`** (a origem real), não de
+  `codigo5_coplan` — ex.: `from runtime.config import ConfigManager`,
+  `from runtime.database import DatabaseManager`, `from runtime.pi_base import
+  get_pi_base`, `from runtime.calc import CalculationManager` (todos com
+  `# noqa: PLC0415`). A web **não** importa mais `codigo5_coplan` (esse shim só
+  serve ao desktop). Evita custo no import e quebra de dependência opcional.
 - **Helpers compartilhados** (reaproveite, não reimplemente):
-  - `ui_helpers.matches_filter_value` — multi-termo (`;`/`,`), semântica
+  - `shared.ui_helpers.matches_filter_value` — multi-termo (`;`/`,`), semântica
     "contém".
-  - `ui_helpers.matches_cod_terms` — COD: match exato para números, "contém"
+  - `shared.ui_helpers.matches_cod_terms` — COD: match exato para números, "contém"
     para termos alfabéticos.
-  - `ui_helpers.paginate_items` — paginação.
-  - `texto_utils.normalize_key` / `normalize_text` — remove acento, uppercase.
+  - `shared.ui_helpers.paginate_items` — paginação.
+  - `shared.texto_utils.normalize_key` / `normalize_text` — remove acento, uppercase.
 - **`@staticmethod`** para utilitários puros (`_row_to_dict`, `_fmt_pi`,
   `_split_terms`, `_to_float_brl`, etc.).
 - **Tags de código** usadas em comentários para rastrear paridade/regra:
@@ -68,11 +86,11 @@ relevantes da obra. Ao adicionar/alterar a busca textual global, garanta que o
 campo de **alimentadores beneficiados** (`alim_benef` / coluna
 `alimentadores_beneficiados`) esteja incluído no haystack.
 
-- Web: `CoplanApi.search_obras` em `main_web.py` — a função `_haystack` precisa
+- Web: `CoplanApi.search_obras` em `backend/domains/obras.py` — a função `_haystack` precisa
   listar `alim_benef` junto dos demais campos (`cod, ano, pi, projeto, alim,
   alim_benef, se, regional, pacote`).
 - Desktop (legado): `filter_table` em
-  `ui/main_window/filtros_paginacao_mixin.py` — `global_string` precisa incluir
+  `legacy_desktop/ui/main_window/filtros_paginacao_mixin.py` — `global_string` precisa incluir
   `item_alimentadores_benef`.
 
 ## Regras de domínio
@@ -96,7 +114,7 @@ A subestação é derivada do **prefixo** do alimentador, antes do primeiro `-`,
 ### COD da obra (`gerar_cod_pep`)
 Formato `SIGLA-YY-PI-ITEM` (ex.: `MA-26-DI-047`). Componentes:
 - **SIGLA**: `config.empresa_sigla` (default `MA`). Siglas válidas:
-  `texto_utils.EMPRESA_SIGLAS_VALIDAS = {MA, PA, PI, AL, RS, AP, GO}`.
+  `shared.texto_utils.EMPRESA_SIGLAS_VALIDAS = {MA, PA, PI, AL, RS, AP, GO}`.
 - **YY**: dois últimos dígitos de `ano_`.
 - **PI**: `pi_base` informado ou derivado de `projeto_investimento` via
   `get_pi_base`; uppercase.
@@ -105,7 +123,7 @@ Formato `SIGLA-YY-PI-ITEM` (ex.: `MA-26-DI-047`). Componentes:
 Este é o COD da coluna `obras.cod`, **não** o COD_PEP sequencial pós-aprovação.
 
 ### Campos obrigatórios no `save_obra`
-`_CAMPOS_OBRIGATORIOS_SAVE` (`main_web.py:445`): `ano_`,
+`_CAMPOS_OBRIGATORIOS_SAVE` (constante de classe em `backend/domains/core.py`): `ano_`,
 `projeto_investimento`, `alimentador_principal`, `quantidade_material`,
 `coordenada_fim`, `tipo_pacote`, `caracteristicas_material`, `manobra`. Além
 disso, `nome_projeto` é obrigatório quando `pi_base` ∈ {DISTRIBUIÇÃO,
