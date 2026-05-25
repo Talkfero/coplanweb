@@ -3,6 +3,8 @@
 
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_submodules
+
 SPEC_DIR = Path(SPECPATH).resolve()
 REPO_ROOT = SPEC_DIR.parent.parent
 
@@ -27,6 +29,18 @@ hiddenimports = [
     "openpyxl",
     # PySide6 removido: a app web e' Qt-free (imports de Qt em runtime.* sao
     # lazy/guardados e so executam no desktop). Ver excludes abaixo.
+]
+
+# main_web importa backend/core/shared/runtime de forma lazy (dentro dos
+# metodos), o que a analise estatica do PyInstaller nao segue. Coleta explicita
+# garante que esses pacotes entrem no bundle do exe web. Para runtime/ listamos
+# so os modulos que a web usa (os demais sao Qt-only do desktop e ficam de fora).
+for _pkg in ("backend", "core", "shared"):
+    hiddenimports += collect_submodules(_pkg)
+hiddenimports += [
+    "runtime.config", "runtime.text_utils", "runtime.pi_base", "runtime.calc",
+    "runtime.database", "runtime.apoio", "runtime.file_io", "runtime.row_helpers",
+    "runtime.notify",
 ]
 
 a = Analysis(

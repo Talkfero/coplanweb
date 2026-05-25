@@ -1,16 +1,15 @@
 # Diretrizes do projeto Coplan Web
 
 > Escopo deste arquivo: a **aplicação WEB** (`main_web.py` + `backend/`,
-> `runtime/`, `core/`, `ui_helpers.py`, `texto_utils.py`, e a pasta `frontend/`).
+> `runtime/`, `core/`, `shared/`, e a pasta `frontend/`).
 > O desktop (`legacy_desktop/codigo5_coplan.py`, `legacy_desktop/ui/*_mixin.py`,
 > PySide6) é legado e **não** é mais importado pela web; não é o foco aqui.
 >
-> **Layout de pastas**: na raiz, `main_web.py` (entrypoint) + os pacotes
+> **Layout de pastas**: a raiz contém só `main_web.py` (entrypoint) + pastas:
 > `backend/` (`api.py`, `_state.py`, `domains/*.py`), `core/`, `runtime/`,
-> `frontend/` (`index.html`, `js/coplan_bridge.js`, `assets/`) + utils
-> compartilhados (`ui_helpers.py`, `texto_utils.py`, `visualizar_pagination.py`).
-> O desktop legado fica em `legacy_desktop/`. Docs em `docs/`, build em
-> `scripts/build/`.
+> `shared/` (utils puros: `ui_helpers.py`, `texto_utils.py`,
+> `visualizar_pagination.py`), `frontend/` (`index.html`, `js/coplan_bridge.js`,
+> `assets/`), `legacy_desktop/` (desktop Qt legado), `docs/`, `scripts/build/`.
 
 ## Arquitetura (web)
 
@@ -65,12 +64,12 @@ inline (`# noqa: BLE001`, `# noqa: PLC0415`, `# noqa: E731`).
   `# noqa: PLC0415`). A web **não** importa mais `codigo5_coplan` (esse shim só
   serve ao desktop). Evita custo no import e quebra de dependência opcional.
 - **Helpers compartilhados** (reaproveite, não reimplemente):
-  - `ui_helpers.matches_filter_value` — multi-termo (`;`/`,`), semântica
+  - `shared.ui_helpers.matches_filter_value` — multi-termo (`;`/`,`), semântica
     "contém".
-  - `ui_helpers.matches_cod_terms` — COD: match exato para números, "contém"
+  - `shared.ui_helpers.matches_cod_terms` — COD: match exato para números, "contém"
     para termos alfabéticos.
-  - `ui_helpers.paginate_items` — paginação.
-  - `texto_utils.normalize_key` / `normalize_text` — remove acento, uppercase.
+  - `shared.ui_helpers.paginate_items` — paginação.
+  - `shared.texto_utils.normalize_key` / `normalize_text` — remove acento, uppercase.
 - **`@staticmethod`** para utilitários puros (`_row_to_dict`, `_fmt_pi`,
   `_split_terms`, `_to_float_brl`, etc.).
 - **Tags de código** usadas em comentários para rastrear paridade/regra:
@@ -115,7 +114,7 @@ A subestação é derivada do **prefixo** do alimentador, antes do primeiro `-`,
 ### COD da obra (`gerar_cod_pep`)
 Formato `SIGLA-YY-PI-ITEM` (ex.: `MA-26-DI-047`). Componentes:
 - **SIGLA**: `config.empresa_sigla` (default `MA`). Siglas válidas:
-  `texto_utils.EMPRESA_SIGLAS_VALIDAS = {MA, PA, PI, AL, RS, AP, GO}`.
+  `shared.texto_utils.EMPRESA_SIGLAS_VALIDAS = {MA, PA, PI, AL, RS, AP, GO}`.
 - **YY**: dois últimos dígitos de `ano_`.
 - **PI**: `pi_base` informado ou derivado de `projeto_investimento` via
   `get_pi_base`; uppercase.

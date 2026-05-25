@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 from core.models import PIMetadata
-from texto_utils import normalize_key
+from shared.texto_utils import normalize_key
 
 
 # ---------------------------------------------------------------------------

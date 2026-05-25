@@ -62,7 +62,7 @@ def get_pi_metadata_map(config: dict | None = None) -> dict[str, dict]:
     Reproduz fielmente a logica do legado (que usa ``setdefault`` para nao
     sobrescrever entrada por nome com a entrada por tipo_base).
     """
-    from texto_utils import normalize_key
+    from shared.texto_utils import normalize_key
     mapping: dict[str, dict] = {}
     for entry in get_pi_metadata_entries(config):
         nome_key = normalize_key(str(entry.get("nome") or ""))

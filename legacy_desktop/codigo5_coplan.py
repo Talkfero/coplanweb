@@ -49,11 +49,11 @@ from PySide6.QtWidgets import (
     QSpacerItem,
 )
 from weakref import WeakKeyDictionary
-from ui_helpers import (
+from shared.ui_helpers import (
     matches_filter_value,
     matches_cod_terms,
 )
-from visualizar_pagination import paginate_visualizar_rows, format_pagination_label
+from shared.visualizar_pagination import paginate_visualizar_rows, format_pagination_label
 from footer_more_actions import (
     get_collapsed_action_keys,
     iter_default_entries,

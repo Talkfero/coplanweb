@@ -237,7 +237,7 @@ class ObrasMixin:
         """[D6] Wrapper sobre visualizar_pagination.format_pagination_label
         para o JS reutilizar a logica do desktop sem duplicar string."""
         try:
-            from visualizar_pagination import format_pagination_label as _impl
+            from shared.visualizar_pagination import format_pagination_label as _impl
             label = _impl(int(current_page or 1),
                           int(total_pages or 1),
                           int(total_items or 0))
@@ -389,7 +389,7 @@ class ObrasMixin:
             return str(f.get(key, "") or "").strip()
 
         try:
-            from ui_helpers import (  # type: ignore[import-not-found]
+            from shared.ui_helpers import (  # type: ignore[import-not-found]
                 matches_cod_terms,
                 matches_filter_value,
             )

@@ -26,7 +26,7 @@ from core.services.row_helpers import (
     row_has_any_key,
     parse_float_brl,
 )
-from texto_utils import normalize_key
+from shared.texto_utils import normalize_key
 
 
 # ---------------------------------------------------------------------------
