@@ -1415,7 +1415,7 @@ class CoplanApi:
             def _haystack(o: dict[str, Any]) -> str:
                 return " ".join(str(o.get(k, "")) for k in (
                     "cod", "ano", "pi", "projeto", "alim",
-                    "se", "regional", "pacote",
+                    "alim_benef", "se", "regional", "pacote",
                 )).lower()
             rows = [o for o in rows if any(t in _haystack(o) for t in q_terms)]
 
