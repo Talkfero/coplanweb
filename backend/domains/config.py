@@ -45,9 +45,7 @@ class ConfigMixin:
         if not isinstance(extras, (list, tuple)):
             return {"ok": False, "error": "extras nao e lista", "extras": []}
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                set_extra_keys_for_pi,
-            )
+            from runtime.pi_base import set_extra_keys_for_pi  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}", "extras": []}
         normalized = [str(k).strip().upper() for k in extras if str(k or "").strip()]
@@ -57,7 +55,7 @@ class ConfigMixin:
             return {"ok": False, "error": f"save: {exc}", "extras": []}
         # Atualiza nosso cache de config local pra refletir a mudanca.
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             self._config = ConfigManager.load_config() or self._config
         except Exception:  # noqa: BLE001
             pass
@@ -78,7 +76,7 @@ class ConfigMixin:
             from core.services.pi_metadata_service import (  # type: ignore[import-not-found]
                 obter_modulos_extras,
             )
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}",
                     "extras": [], "pi": pi}
@@ -105,7 +103,7 @@ class ConfigMixin:
             from core.services.pi_metadata_service import (  # type: ignore[import-not-found]
                 obter_descricao_template,
             )
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}", "template": "",
                     "pi": pi_s}
@@ -139,9 +137,7 @@ class ConfigMixin:
         if not isinstance(dados, dict):
             dados = {}
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                get_descricao_obra_from_template,
-            )
+            from runtime.calc import get_descricao_obra_from_template  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}", "descricao": ""}
         try:
@@ -164,7 +160,7 @@ class ConfigMixin:
     # ------------------------------------------------------------------
     def get_config_empresa(self) -> dict[str, Any]:
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}"}
@@ -180,9 +176,7 @@ class ConfigMixin:
         if not isinstance(payload, dict):
             return {"ok": False, "error": "payload nao e dict"}
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager, EMPRESA_SIGLAS_VALIDAS,
-            )
+            from runtime.config import ConfigManager, EMPRESA_SIGLAS_VALIDAS  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
 
@@ -271,7 +265,7 @@ class ConfigMixin:
     # ------------------------------------------------------------------
     def get_templates(self) -> dict[str, Any]:
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}", "items": {}}
@@ -284,7 +278,7 @@ class ConfigMixin:
         if not isinstance(payload, dict):
             return {"ok": False, "error": "payload nao e dict"}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
         clean = {
@@ -307,7 +301,7 @@ class ConfigMixin:
         if not pi_s:
             return {"ok": False, "error": "pi vazio"}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
         try:
@@ -328,7 +322,7 @@ class ConfigMixin:
     def restore_all_templates(self) -> dict[str, Any]:
         """Restaura todos: zera descricao_obra_templates."""
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
         try:
@@ -397,7 +391,7 @@ class ConfigMixin:
         Espelho de _get_visualizar_columns_candidates do desktop:
         ORDERED_COLUMNS + colunas reais do banco, deduplicado."""
         try:
-            from codigo5_coplan import ORDERED_COLUMNS  # type: ignore[import-not-found]
+            from runtime.config import ORDERED_COLUMNS  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}", "items": []}
         ordered = [str(c) for c in (ORDERED_COLUMNS or []) if c]
@@ -429,7 +423,7 @@ class ConfigMixin:
           pi_base_hidden_defaults) -- filtrados de `all`.
         - all: defaults visiveis (defaults menos hidden) + custom."""
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}",
@@ -482,7 +476,7 @@ class ConfigMixin:
         if not s:
             return {"ok": False, "error": "nome vazio"}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}"}
@@ -527,7 +521,7 @@ class ConfigMixin:
         if not s:
             return {"ok": False, "error": "nome vazio"}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}"}
@@ -566,7 +560,7 @@ class ConfigMixin:
 
     def get_pi_base_map(self) -> dict[str, Any]:
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}", "items": {}}
@@ -579,7 +573,7 @@ class ConfigMixin:
         if not isinstance(payload, dict):
             return {"ok": False, "error": "payload nao e dict"}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
         clean = {
@@ -614,9 +608,7 @@ class ConfigMixin:
         """Devolve mapa enriquecido { NOME: {codigo, superintendencia,
         se_prefixos, cor, source: 'default'|'config'} }."""
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager, REGIONAL_MAP,
-            )
+            from runtime.config import ConfigManager, REGIONAL_MAP  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}", "items": {}}
         cfg = ConfigManager.load_config() or {}
@@ -654,7 +646,7 @@ class ConfigMixin:
         if not isinstance(payload, dict):
             return {"ok": False, "error": "payload nao e dict"}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}"}
@@ -677,7 +669,7 @@ class ConfigMixin:
         if not nome_s:
             return {"ok": False, "error": "nome vazio"}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}"}

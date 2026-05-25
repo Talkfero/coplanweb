@@ -228,7 +228,7 @@ class SupportFileManager:
         from core.exceptions import ApoioFileError
         from core.services.apoio_service import carregar_dados_apoio
         # Lazy import para evitar circular -- show_user_error abre QMessageBox.
-        from codigo5_coplan import show_user_error
+        from runtime.dialogs import show_user_error  # noqa: PLC0415
 
         self.clear_data()
         try:

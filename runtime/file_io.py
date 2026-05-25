@@ -97,7 +97,7 @@ def carregar_relatorio_csv(db_manager, origem_csv: str, parent=None) -> Tuple[bo
     """
     # Lazy import: find_duplicate_in_db ainda mora em codigo5_coplan
     # (depende de wrappers row_helpers que ainda nao foram extraidos).
-    from codigo5_coplan import find_duplicate_in_db
+    from runtime.row_helpers import find_duplicate_in_db  # noqa: PLC0415
 
     try:
         if not db_manager or not getattr(db_manager, "db_path", None):

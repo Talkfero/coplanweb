@@ -78,7 +78,7 @@ class CoreMixin:
         """Recarrega self._config do disco. Chamado automaticamente
         sempre que algum save_* invalida o cache (self._config = None)."""
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             self._config = ConfigManager.load_config()
         except Exception as exc:  # noqa: BLE001
             print(f"[main_web] reload config falhou: {exc}", file=sys.stderr)
@@ -372,7 +372,7 @@ class CoreMixin:
         # (paridade: ver cadastro_mixin.py:602-606).
         try:
             from runtime.text_utils import normalize_key  # noqa: PLC0415
-            from codigo5_coplan import get_pi_base  # noqa: PLC0415
+            from runtime.pi_base import get_pi_base  # noqa: PLC0415
         except Exception:  # noqa: BLE001
             normalize_key = lambda s: str(s or "").strip().upper()  # noqa: E731
             get_pi_base = lambda pi, prompt_user=False: ""  # noqa: E731
@@ -402,12 +402,10 @@ class CoreMixin:
             if self._db_manager is not None:
                 return
             try:
-                from codigo5_coplan import (  # type: ignore[import-not-found]
-                    DatabaseManager,
-                    SupportFileManager,
-                    CalculationManager,
-                    ConfigManager,
-                )
+                from runtime.apoio import SupportFileManager  # noqa: PLC0415
+                from runtime.calc import CalculationManager  # noqa: PLC0415
+                from runtime.config import ConfigManager  # noqa: PLC0415
+                from runtime.database import DatabaseManager  # noqa: PLC0415
                 self._db_manager = DatabaseManager()
                 self._support_manager = SupportFileManager()
                 self._calc_manager = CalculationManager(
@@ -787,9 +785,7 @@ class CoreMixin:
         display_name = ""
         source = "fallback"
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager,
-            )
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
             ui_prefs = cfg.get("ui_preferences_por_usuario") or {}
             if isinstance(ui_prefs, dict):
@@ -843,9 +839,7 @@ class CoreMixin:
         info = self.get_user_info()
         username = info.get("username") or "default"
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager,
-            )
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"config: {exc}"}
@@ -876,7 +870,7 @@ class CoreMixin:
         """
         # Carrega config sem instanciar managers (mais rapido no boot da UI).
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
 
             cfg = ConfigManager.load_config()
         except Exception as exc:  # noqa: BLE001

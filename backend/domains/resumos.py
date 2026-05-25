@@ -369,9 +369,7 @@ class ResumosMixin:
             from core.services.resumo_service import (  # type: ignore[import-not-found]
                 montar_resumo_ganhos_projeto,
             )
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                DEFAULT_CRITERIOS,
-            )
+            from runtime.config import DEFAULT_CRITERIOS  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}",
                     "linhas": [], "projeto": nome_s}
@@ -593,9 +591,7 @@ class ResumosMixin:
             from core.services.resumo_service import (  # type: ignore[import-not-found]
                 montar_quadro_resumo_from_ganhos,
             )
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                DEFAULT_CRITERIOS,
-            )
+            from runtime.config import DEFAULT_CRITERIOS  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}", "linhas": []}
 

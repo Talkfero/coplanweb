@@ -161,7 +161,7 @@ class CalculationManager:
         anteriormente.
         """
         # get_pi_base permanece em codigo5_coplan (depende de PI_BASE_MAP/Qt prompt).
-        from codigo5_coplan import get_pi_base
+        from runtime.pi_base import get_pi_base  # noqa: PLC0415
 
         pacote_str = pacote.strip().upper()
         mapping = {
@@ -820,7 +820,7 @@ class CalculationManager:
 
     def calcular_contas_contratos_beneficiadas(self, data_topologia, data_confiabilidade, alimentadores_considerados, projeto_investimento):
         """Calcula somatório das Contas Contratos Beneficiadas para todos os alimentadores."""
-        from codigo5_coplan import get_pi_base
+        from runtime.pi_base import get_pi_base  # noqa: PLC0415
 
         total_contas_beneficiadas = 0
 

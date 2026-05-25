@@ -38,9 +38,7 @@ class CriteriosMixin:
     # ------------------------------------------------------------------
     def get_criterios(self) -> dict[str, Any]:
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager, DEFAULT_CRITERIOS, DEFAULT_PIORA_MERCADO,
-            )
+            from runtime.config import ConfigManager, DEFAULT_CRITERIOS, DEFAULT_PIORA_MERCADO  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
         cfg = ConfigManager.load_config() or {}
@@ -85,7 +83,7 @@ class CriteriosMixin:
         if not isinstance(payload, dict):
             return {"ok": False, "error": "payload nao e dict"}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
 
@@ -146,9 +144,7 @@ class CriteriosMixin:
         """Reseta criterios_planejamento + piora_mercado aos DEFAULTS do
         legado. Mantem demais chaves do config intactas."""
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager, DEFAULT_CRITERIOS, DEFAULT_PIORA_MERCADO,
-            )
+            from runtime.config import ConfigManager, DEFAULT_CRITERIOS, DEFAULT_PIORA_MERCADO  # noqa: PLC0415
             ConfigManager.save_config({
                 "criterios_planejamento": dict(DEFAULT_CRITERIOS),
                 "piora_mercado": dict(DEFAULT_PIORA_MERCADO),

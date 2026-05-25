@@ -319,7 +319,7 @@ class CenariosMixin:
         """Ativa ou desativa cenario. ``nome`` vazio = desativa.
         Salva em config['cenario_ativo'] persistente."""
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
         nome_s = str(nome or "").strip()

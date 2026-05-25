@@ -971,9 +971,7 @@ class ObrasMixin:
             from core.services.relatorio_criterios_service import (  # type: ignore[import-not-found]
                 montar_relatorio_criterios_por_projeto,
             )
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                DEFAULT_CRITERIOS,
-            )
+            from runtime.config import DEFAULT_CRITERIOS  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "path": "", "count_projetos": 0,
                     "count_alimentadores": 0, "error": f"import: {exc}"}
@@ -1485,7 +1483,7 @@ class ObrasMixin:
         # desktop). Default 'MA' se nao configurado.
         cfg: dict[str, Any] = {}
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception:  # noqa: BLE001
             pass
@@ -1500,7 +1498,7 @@ class ObrasMixin:
         pi = str(pi_base or "").strip().upper()
         if not pi and projeto_investimento:
             try:
-                from codigo5_coplan import get_pi_base  # type: ignore[import-not-found]
+                from runtime.pi_base import get_pi_base  # noqa: PLC0415
                 pi = (get_pi_base(str(projeto_investimento), prompt_user=False) or "").upper()
             except Exception:  # noqa: BLE001
                 # Fallback grosseiro: 2 primeiras letras nao-espaco do nome.

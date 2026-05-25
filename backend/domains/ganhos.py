@@ -270,7 +270,7 @@ class GanhosMixin:
         idx = {"tmin": 0, "tmax": 1, "carreg": 2, "manobra": 3, "clientes": 4}
 
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "atende": None, "motivos": [],
                     "error": f"import config: {exc}"}
@@ -340,7 +340,7 @@ class GanhosMixin:
             return None
 
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             from runtime.config import (  # type: ignore[import-not-found]
                 DEFAULT_CRITERIOS, DEFAULT_PIORA_MERCADO,
             )

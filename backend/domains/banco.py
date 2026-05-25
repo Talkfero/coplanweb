@@ -443,10 +443,8 @@ class BancoMixin:
 
         # ----- Helpers para #28 merge: empresa + cod_pep -----
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                cod_pep as _cod_pep_calc,
-                normalize_text as _norm_text,
-            )
+            from runtime.database import cod_pep as _cod_pep_calc  # noqa: PLC0415
+            from runtime.text_utils import normalize_text as _norm_text  # noqa: PLC0415
         except Exception:  # noqa: BLE001
             _cod_pep_calc = None
             _norm_text = lambda s: str(s or "").strip().upper()  # noqa: E731
@@ -776,7 +774,7 @@ class BancoMixin:
             except Exception:  # noqa: BLE001
                 all_cols = []
         try:
-            from codigo5_coplan import ConfigManager  # noqa: PLC0415
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "all": all_cols, "visible": [], "order": [],
@@ -834,7 +832,7 @@ class BancoMixin:
         if not isinstance(payload, dict):
             return {"ok": False, "error": "payload nao e dict"}
         try:
-            from codigo5_coplan import ConfigManager  # noqa: PLC0415
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"load_config: {exc}"}
@@ -872,7 +870,7 @@ class BancoMixin:
     def visualizar_columns_reset(self) -> dict[str, Any]:
         """Limpa toda a config de colunas (volta ao default)."""
         try:
-            from codigo5_coplan import ConfigManager  # noqa: PLC0415
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"load_config: {exc}"}
@@ -955,7 +953,7 @@ class BancoMixin:
                     "error": f"connect: {exc}"}
         # Salva no config
         try:
-            from codigo5_coplan import ConfigManager  # noqa: PLC0415
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
             cfg["obras"] = target
             ConfigManager.save_config(cfg)
@@ -1088,7 +1086,7 @@ class BancoMixin:
             target = target + ".db"
         # Cria DatabaseManager auxiliar para o destino
         try:
-            from codigo5_coplan import DatabaseManager  # noqa: PLC0415
+            from runtime.database import DatabaseManager  # noqa: PLC0415
             dest_db = DatabaseManager()
             dest_db.connect(target)
         except Exception as exc:  # noqa: BLE001

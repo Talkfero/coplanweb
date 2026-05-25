@@ -1286,7 +1286,7 @@ class DatabaseManager:
     def _apply_novo_bay_rules(self, data, exclude_cod=None):
         """Aplica as regras de consistência ao campo ``novo_bay``."""
         # get_pi_base permanece em codigo5_coplan (depende de PI_BASE_MAP/Qt prompt).
-        from codigo5_coplan import get_pi_base
+        from runtime.pi_base import get_pi_base  # noqa: PLC0415
 
         try:
             valor = str(data.get("novo_bay", "")).strip().upper()
@@ -1756,7 +1756,7 @@ class DatabaseManager:
     def insert_obra(self, dados):
         """Insere uma obra usando mapeamento por nome das colunas."""
         # get_pi_base permanece em codigo5_coplan (Qt prompt + PI_BASE_MAP).
-        from codigo5_coplan import get_pi_base
+        from runtime.pi_base import get_pi_base  # noqa: PLC0415
 
         with self._with_connection():
             cols = self.get_column_names()
@@ -1992,7 +1992,7 @@ class DatabaseManager:
     def update_obra(self, dados, cod, skip_blank=False):
         """Atualiza uma obra usando mapeamento por nome das colunas."""
         # get_pi_base permanece em codigo5_coplan.
-        from codigo5_coplan import get_pi_base
+        from runtime.pi_base import get_pi_base  # noqa: PLC0415
 
         with self._with_connection():
             cursor = self._get_cursor()

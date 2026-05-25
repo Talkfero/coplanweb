@@ -178,9 +178,7 @@ class TecnicoMixin:
         # Le ultimo token salvo
         last_token = ""
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager,
-            )
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
             last_token = str(cfg.get("tecnico_last_token") or "")
         except Exception:  # noqa: BLE001
@@ -217,9 +215,7 @@ class TecnicoMixin:
         # Persiste novo token (mesmo se nao houve mudanca - garante
         # que o "primeiro contato" salve o baseline).
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager,
-            )
+            from runtime.config import ConfigManager  # noqa: PLC0415
             ConfigManager.save_config({"tecnico_last_token": token_now})
             self._config = None
         except Exception:  # noqa: BLE001
@@ -313,7 +309,7 @@ class TecnicoMixin:
         - ``files`` = lista de {name, path, size, mtime}
         """
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
         except Exception as exc:  # noqa: BLE001
             return {
@@ -395,7 +391,7 @@ class TecnicoMixin:
             return self.list_ganhos_files("")
         path = result[0] if isinstance(result, (list, tuple)) else str(result)
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
             cfg = ConfigManager.load_config() or {}
             cfg["caminho_pasta_ganhos"] = path
             ConfigManager.save_config(cfg)
@@ -559,7 +555,7 @@ class TecnicoMixin:
         path = str(pasta or "").strip()
         if not path:
             try:
-                from codigo5_coplan import ConfigManager  # noqa: PLC0415
+                from runtime.config import ConfigManager  # noqa: PLC0415
                 cfg = ConfigManager.load_config() or {}
                 path = str(cfg.get("caminho_pasta_ganhos") or "").strip()
             except Exception as exc:  # noqa: BLE001

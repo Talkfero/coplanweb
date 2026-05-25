@@ -156,10 +156,8 @@ class CadastroMixin:
     # ------------------------------------------------------------------
     def get_pi_options(self) -> dict[str, Any]:
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                ConfigManager,
-                PI_BASE_CUSTOM,
-            )
+            from runtime.config import ConfigManager  # noqa: PLC0415
+            from runtime.pi_base import PI_BASE_CUSTOM  # noqa: PLC0415
             from core.services.pi_metadata_service import (  # type: ignore[import-not-found]
                 listar_todas_bases,
             )
@@ -209,7 +207,7 @@ class CadastroMixin:
 
     def get_regionais(self) -> dict[str, Any]:
         try:
-            from codigo5_coplan import REGIONAL_MAP, ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import REGIONAL_MAP, ConfigManager  # noqa: PLC0415
             base = list(REGIONAL_MAP.keys())
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "items": [], "error": f"REGIONAL_MAP: {exc}"}
@@ -391,7 +389,7 @@ class CadastroMixin:
         pi_raw = _v("projeto_investimento")
         pi_base_raw = _v("pi_base")
         try:
-            from codigo5_coplan import normalize_key  # type: ignore[import-not-found]
+            from runtime.text_utils import normalize_key  # noqa: PLC0415
         except Exception:  # noqa: BLE001
             def normalize_key(s: str) -> str:  # type: ignore[no-redef]
                 return (s or "").strip().upper()
@@ -437,10 +435,7 @@ class CadastroMixin:
             return {"ok": False, "pi_base": "", "conhecido": False,
                     "error": "pi vazio"}
         try:
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                get_pi_base,
-                _is_pi_base_known,
-            )
+            from runtime.pi_base import get_pi_base, _is_pi_base_known  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "pi_base": "", "conhecido": False,
                     "error": f"import: {exc}"}

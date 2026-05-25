@@ -56,10 +56,13 @@ inline (`# noqa: BLE001`, `# noqa: PLC0415`, `# noqa: E731`).
   `{"ok": bool, "error": str, ...}`. Mantenha esse formato; o front depende dele.
   Nunca deixe exceção vazar para o bridge — capture e retorne `{"ok": False,
   "error": ...}` (`# noqa: BLE001` é o padrão aceito para o except amplo).
-- **Imports locais/lazy** dentro dos métodos para módulos do legado
-  (`from codigo5_coplan import ...  # type: ignore[import-not-found]`,
-  `# noqa: PLC0415`). Evita custo de Qt/SQLite no import e quebra de
-  dependência opcional.
+- **Imports locais/lazy** dentro dos métodos para os managers/helpers do
+  legado. Importe **direto de `runtime.*`/`core.*`** (a origem real), não de
+  `codigo5_coplan` — ex.: `from runtime.config import ConfigManager`,
+  `from runtime.database import DatabaseManager`, `from runtime.pi_base import
+  get_pi_base`, `from runtime.calc import CalculationManager` (todos com
+  `# noqa: PLC0415`). A web **não** importa mais `codigo5_coplan` (esse shim só
+  serve ao desktop). Evita custo no import e quebra de dependência opcional.
 - **Helpers compartilhados** (reaproveite, não reimplemente):
   - `ui_helpers.matches_filter_value` — multi-termo (`;`/`,`), semântica
     "contém".

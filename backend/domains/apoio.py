@@ -487,7 +487,7 @@ class ApoioMixin:
             + salva path no config. Esta e a UNICA rota que le xlsx
             (junto com apoio_reload_from_xlsx*)."""
         try:
-            from codigo5_coplan import ConfigManager  # type: ignore[import-not-found]
+            from runtime.config import ConfigManager  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}"}
         self._ensure_managers()

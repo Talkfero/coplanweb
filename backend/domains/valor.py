@@ -101,9 +101,8 @@ class ValorMixin:
             from core.services.pi_metadata_service import (  # type: ignore[import-not-found]
                 obter_modulos_extras,
             )
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                REGIONAL_MAP, get_pi_base, ConfigManager,
-            )
+            from runtime.config import REGIONAL_MAP, ConfigManager  # noqa: PLC0415
+            from runtime.pi_base import get_pi_base  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}",
                     "valor": None, "valor_formatado": "", "chave": "",
@@ -274,9 +273,8 @@ class ValorMixin:
             from core.services.pi_metadata_service import (  # type: ignore[import-not-found]
                 obter_modulos_extras,
             )
-            from codigo5_coplan import (  # type: ignore[import-not-found]
-                REGIONAL_MAP, get_pi_base, ConfigManager,
-            )
+            from runtime.config import REGIONAL_MAP, ConfigManager  # noqa: PLC0415
+            from runtime.pi_base import get_pi_base  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"import: {exc}",
                     "processadas_ok": 0, "falhas_total": 0,
