@@ -60,9 +60,14 @@ from footer_more_actions import (
     should_show_more_actions_button,
 )
 
-MODULE_DIR = Path(__file__).resolve().parent
-if str(MODULE_DIR) not in sys.path:
-    sys.path.insert(0, str(MODULE_DIR))
+MODULE_DIR = Path(__file__).resolve().parent  # legacy_desktop/
+REPO_ROOT = MODULE_DIR.parent                  # raiz do repo
+# Mantem na path: legacy_desktop/ (para `codigo5_coplan`, `ui`,
+# `footer_more_actions`) e a raiz (para os modulos compartilhados
+# `runtime`, `core`, `ui_helpers`, `texto_utils`, `visualizar_pagination`).
+for _p in (str(MODULE_DIR), str(REPO_ROOT)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 
 # Re-exports: setup_logging/ts_now/ts_log foram extraidos para
@@ -384,7 +389,7 @@ class MainWindow(
         # Ícone do aplicativo (quando disponível localmente)
         try:
             icon_candidates = [
-                os.path.join(MODULE_DIR, "frontend", "assets", "cadastro-de-obras.ico"),
+                os.path.join(REPO_ROOT, "frontend", "assets", "cadastro-de-obras.ico"),
                 os.path.join(MODULE_DIR, "cadastro-de-obras.ico"),
                 os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "cadastro-de-obras.ico"),
             ]

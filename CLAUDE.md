@@ -1,14 +1,15 @@
 # Diretrizes do projeto Coplan Web
 
-> Escopo deste arquivo: a **aplicação WEB** (`main_web.py` + `runtime/`,
-> `core/`, `ui_helpers.py`, `texto_utils.py`, e a pasta `frontend/`). O desktop
-> (`codigo5_coplan.py`, `ui/main_window/*_mixin.py`, PySide6) é legado
-> reaproveitado como biblioteca de managers; não é o foco aqui.
+> Escopo deste arquivo: a **aplicação WEB** (`main_web.py` + `backend/`,
+> `runtime/`, `core/`, `ui_helpers.py`, `texto_utils.py`, e a pasta `frontend/`).
+> O desktop (`legacy_desktop/codigo5_coplan.py`, `legacy_desktop/ui/*_mixin.py`,
+> PySide6) é legado e **não** é mais importado pela web; não é o foco aqui.
 >
-> **Layout de pastas**: a raiz contém só `main_web.py` (entrypoint) + módulos
-> Python compartilhados legados. O backend fica em `backend/` (`api.py`,
-> `_state.py`, `domains/*.py`). O front-end vive em `frontend/` (`index.html`,
-> `js/coplan_bridge.js`, `assets/`). Docs em `docs/`, scripts de build em
+> **Layout de pastas**: na raiz, `main_web.py` (entrypoint) + os pacotes
+> `backend/` (`api.py`, `_state.py`, `domains/*.py`), `core/`, `runtime/`,
+> `frontend/` (`index.html`, `js/coplan_bridge.js`, `assets/`) + utils
+> compartilhados (`ui_helpers.py`, `texto_utils.py`, `visualizar_pagination.py`).
+> O desktop legado fica em `legacy_desktop/`. Docs em `docs/`, build em
 > `scripts/build/`.
 
 ## Arquitetura (web)
@@ -90,7 +91,7 @@ campo de **alimentadores beneficiados** (`alim_benef` / coluna
   listar `alim_benef` junto dos demais campos (`cod, ano, pi, projeto, alim,
   alim_benef, se, regional, pacote`).
 - Desktop (legado): `filter_table` em
-  `ui/main_window/filtros_paginacao_mixin.py` — `global_string` precisa incluir
+  `legacy_desktop/ui/main_window/filtros_paginacao_mixin.py` — `global_string` precisa incluir
   `item_alimentadores_benef`.
 
 ## Regras de domínio
