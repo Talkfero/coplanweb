@@ -42,7 +42,7 @@
 ## Como rodar
 
 ```bash
-pip install -r requirements-web.txt   # pywebview, pandas, openpyxl, PySide6
+pip install -r requirements-web.txt   # pywebview, pandas, openpyxl (SEM PySide6)
 python main_web.py
 ```
 

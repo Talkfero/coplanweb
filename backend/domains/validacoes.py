@@ -259,7 +259,7 @@ class ValidacoesMixin:
         if not os.path.exists(path_s):
             return {"ok": False, "error": f"path nao existe: {path_s}"}
         try:
-            from runtime.dialogs import open_file
+            from runtime.notify import open_file  # noqa: PLC0415
             open_file(path_s)
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"open: {exc}"}

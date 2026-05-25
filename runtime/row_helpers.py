@@ -18,7 +18,10 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
-from PySide6 import QtCore, QtWidgets
+try:  # Qt e' opcional: a app web (headless) nao instala PySide6.
+    from PySide6 import QtCore, QtWidgets  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # os helpers que abrem QMessageBox so rodam no desktop
+    QtCore = QtWidgets = None  # type: ignore[assignment]
 
 from runtime.config import DEFAULT_GANHOS_TOLERANCIA, ConfigManager
 

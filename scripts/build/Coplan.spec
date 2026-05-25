@@ -25,10 +25,8 @@ hiddenimports = [
     "pythonnet",
     "pandas",
     "openpyxl",
-    "PySide6",
-    "PySide6.QtCore",
-    "PySide6.QtWidgets",
-    "PySide6.QtGui",
+    # PySide6 removido: a app web e' Qt-free (imports de Qt em runtime.* sao
+    # lazy/guardados e so executam no desktop). Ver excludes abaixo.
 ]
 
 a = Analysis(
@@ -40,7 +38,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["PyQt5", "PyQt6"],
+    excludes=["PyQt5", "PyQt6", "PySide6"],
     noarchive=False,
     optimize=0,
 )

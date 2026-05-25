@@ -227,8 +227,9 @@ class SupportFileManager:
         """
         from core.exceptions import ApoioFileError
         from core.services.apoio_service import carregar_dados_apoio
-        # Lazy import para evitar circular -- show_user_error abre QMessageBox.
-        from runtime.dialogs import show_user_error  # noqa: PLC0415
+        # Lazy import -- runtime.notify nao arrasta Qt no import (web headless);
+        # no desktop delega para o QMessageBox de runtime.dialogs.
+        from runtime.notify import show_user_error  # noqa: PLC0415
 
         self.clear_data()
         try:

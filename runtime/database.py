@@ -24,8 +24,15 @@ from contextlib import contextmanager
 from functools import wraps
 from typing import Any, Callable, Dict, Optional, Sequence
 
-from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QObject, Signal, Slot
+try:  # Qt e' opcional: a app web (headless) nao instala PySide6.
+    from PySide6 import QtCore, QtWidgets  # type: ignore[import-not-found]
+    from PySide6.QtCore import QObject, Signal, Slot  # type: ignore[import-not-found]
+    _HAS_QT = True
+except ModuleNotFoundError:  # web: o worker Qt/UI-thread nunca e exercido
+    QtCore = QtWidgets = None  # type: ignore[assignment]
+    QObject = object  # type: ignore[assignment,misc]
+    Signal = Slot = None  # type: ignore[assignment]
+    _HAS_QT = False
 
 from runtime.text_utils import normalize_key, normalize_text, parse_cod_pep, ts_log, ts_now
 from runtime.config import (
@@ -152,7 +159,7 @@ def log_connect_debug(
     if exc is not None:
         exc_text = f"{type(exc).__name__}: {exc}"
     payload = extra if isinstance(extra, dict) else {}
-    app = QtWidgets.QApplication.instance()
+    app = QtWidgets.QApplication.instance() if QtWidgets is not None else None
     ui_thread_name = ""
     on_ui_thread = False
     try:
@@ -372,26 +379,29 @@ def retry_on_busy(max_retries: int = 0, base_delay: float = 0.5):
 # ---------------------------------------------------------------------------
 # Qt: DBCallableWorker + run_write_in_qthread_if_ui_thread
 # ---------------------------------------------------------------------------
-class DBCallableWorker(QObject):
-    finished = Signal(object, object)
+if _HAS_QT:
+    class DBCallableWorker(QObject):
+        finished = Signal(object, object)
 
-    def __init__(self, operation: Callable[[], Any]) -> None:
-        super().__init__()
-        self._operation = operation
+        def __init__(self, operation: Callable[[], Any]) -> None:
+            super().__init__()
+            self._operation = operation
 
-    @Slot()
-    def run(self) -> None:
-        try:
-            result = self._operation()
-            self.finished.emit(result, None)
-        except Exception as exc:
-            self.finished.emit(None, exc)
+        @Slot()
+        def run(self) -> None:
+            try:
+                result = self._operation()
+                self.finished.emit(result, None)
+            except Exception as exc:
+                self.finished.emit(None, exc)
+else:  # web headless: Qt ausente; o worker nunca e instanciado
+    DBCallableWorker = None  # type: ignore[assignment,misc]
 
 
 def run_write_in_qthread_if_ui_thread(method):
     @wraps(method)
     def wrapper(*args, **kwargs):
-        app = QtWidgets.QApplication.instance()
+        app = QtWidgets.QApplication.instance() if QtWidgets is not None else None
         if app is None:
             return method(*args, **kwargs)
         ui_thread = app.thread()

@@ -21,7 +21,10 @@ import textwrap
 from typing import Any, Dict
 
 import pandas as pd
-from PySide6 import QtWidgets
+try:  # Qt e' opcional: a app web (headless) nao instala PySide6.
+    from PySide6 import QtWidgets  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # os caminhos que usam QtWidgets so rodam no desktop
+    QtWidgets = None  # type: ignore[assignment]
 
 from runtime.apoio import SupportFileManager, read_excel_cached
 from runtime.config import REGIONAL_MAP, ORDERED_COLUMNS, ConfigManager
