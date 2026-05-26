@@ -9446,21 +9446,31 @@
   }
   function getAlimentadores() {
     // Alimentador principal + lista de beneficiados (replica
-    // ApoioMixin.get_alimentadores). A UI web tem o input do principal
-    // dentro do form de Cadastro; beneficiados estao em uma <ul> ao lado.
+    // ApoioMixin.get_alimentadores). O principal esta no form de Cadastro;
+    // os beneficiados sao os chips em #cad-list-alim-benef (mesma fonte
+    // usada no save via coplanCadastro.getChips).
     var alims = [];
     var inpPrincipal = getCadastroFieldByLabel('Alimentador');
     if (inpPrincipal) {
       var v = (inpPrincipal.value || '').trim();
       if (v) alims.push(v);
     }
-    var listBenef = document.querySelector('#alim-benef-list, .list-alim-benef');
-    if (listBenef) {
-      listBenef.querySelectorAll('li').forEach(function (li) {
-        var t = (li.textContent || '').trim();
-        if (t) alims.push(t);
-      });
+    var benef = [];
+    if (window.coplanCadastro
+        && typeof window.coplanCadastro.getChips === 'function') {
+      benef = window.coplanCadastro.getChips() || [];
+    } else {
+      var box = document.getElementById('cad-list-alim-benef');
+      if (box) {
+        box.querySelectorAll('.chip').forEach(function (c) {
+          benef.push((c.textContent || '').replace(/\s+/g, ' ').trim());
+        });
+      }
     }
+    benef.forEach(function (b) {
+      var t = String(b || '').trim();
+      if (t && alims.indexOf(t) === -1) alims.push(t);
+    });
     return alims;
   }
   function getProjetoInvestimento() {
