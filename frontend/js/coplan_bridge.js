@@ -8620,102 +8620,6 @@
 </script>
 <script>
 (function () {
-  // ---- F2 - Combo "Nome do Projeto" sync com apoio + banco ----
-  // Replica populate_combo_nome_projeto do desktop. Fontes:
-  //   1) apoio.xlsx (nomes_projetos_pre_definidos)
-  //   2) DISTINCT nome_projeto do banco (obras existentes)
-  // Dedup case-insensitive + normaliza "MELHORIAS AL" -> "Melhorias AL".
-  // Auto-fill: ao escolher "Melhorias AL", preenche field Projeto com
-  // "Melhorias_AL_" (replica _preencher_nome_projeto_auto).
-  function api() { return window.pywebview && window.pywebview.api; }
-  function getProjetoInput() {
-    return document.getElementById('cad-input-projeto');
-  }
-  function setProjetoIfEmpty(prefix) {
-    var inp = getProjetoInput();
-    if (!inp) return;
-    // Replica do desktop: preenche apenas se o campo esta vazio para
-    // nao sobrescrever digitacao do usuario.
-    var current = String(inp.value || '').trim();
-    if (current && !/^Melhorias_AL_?/i.test(current)) return;
-    inp.value = prefix;
-    try { inp.setSelectionRange(prefix.length, prefix.length); } catch (e) {}
-    inp.focus();
-    inp.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-  function escHtml(s) {
-    return String(s == null ? '' : s).replace(/[<>&"']/g, function (c) {
-      return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c];
-    });
-  }
-  function populate() {
-    var sel = document.getElementById('cad-sel-nome-projeto-combo');
-    if (!sel) return Promise.resolve();
-    var a = api();
-    if (!(a && a.list_nomes_projetos)) return Promise.resolve();
-    return a.list_nomes_projetos().then(function (r) {
-      if (!r || !r.ok) return;
-      var items = r.items || [];
-      // Preserva selecao atual se possivel
-      var prev = sel.value || '';
-      var html = '<option value="">— selecione —</option>';
-      html += items.map(function (n) {
-        var safe = escHtml(n);
-        return '<option value="' + safe + '">' + safe + '</option>';
-      }).join('');
-      sel.innerHTML = html;
-      if (prev) {
-        for (var i = 0; i < sel.options.length; i++) {
-          if (sel.options[i].value === prev) {
-            sel.selectedIndex = i; break;
-          }
-        }
-      }
-    }).catch(function (e) {
-      console.warn('[coplan] list_nomes_projetos catch:', e);
-    });
-  }
-  function onChange() {
-    var sel = document.getElementById('cad-sel-nome-projeto-combo');
-    if (!sel) return;
-    var v = String(sel.value || '').trim();
-    if (!v) return;
-    if (v.toUpperCase() === 'MELHORIAS AL') {
-      setProjetoIfEmpty('Melhorias_AL_');
-      if (typeof window.coplanToast === 'function') {
-        window.coplanToast('Auto-fill: campo Projeto = "Melhorias_AL_"',
-                           'info');
-      }
-    }
-  }
-  function bind() {
-    var sel = document.getElementById('cad-sel-nome-projeto-combo');
-    if (!sel || sel.__nomeProjetoBound) return;
-    sel.__nomeProjetoBound = true;
-    sel.addEventListener('change', onChange);
-    populate();
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bind);
-  } else {
-    bind();
-  }
-  // Re-popula quando user troca para Cadastro (caso a lista mude).
-  document.addEventListener('coplan:tab', function (ev) {
-    if (ev && ev.detail && ev.detail.name === 'cadastro') {
-      setTimeout(populate, 50);
-    }
-  });
-  // Re-popula apos load_apoio bem-sucedido (apoio injeta novos nomes).
-  document.addEventListener('coplan:apoio-loaded', function () {
-    setTimeout(populate, 50);
-  });
-  // Expoe globalmente para outros scripts forçarem reload
-  window.coplanPopulateNomeProjetoCombo = populate;
-})();
-</script>
-<script>
-(function () {
   // ---- F16 - Atualizar Projeto navegacional ----
   // Replica iniciar_atualizacao_projeto + prev/next/finalizar/cancelar
   // do desktop (AtualizarObraMixin).
@@ -13504,7 +13408,6 @@
       // Mesma lista no select de "Alimentador Beneficiado" (M048).
       populateSelect('cad-input-alim-benef',   alimItems, { allowEmpty: true });
       populateSelect('cad-sel-caracteristicas', (meta.caracteristicas && meta.caracteristicas.items) || [], { allowEmpty: true });
-      populateSelect('cad-sel-nome-projeto-combo', meta.nomes_projeto || [], { allowEmpty: true });
       // Aprovada padrao = NÃO (replica desktop field_obra_aprovada index 0).
       setAprovada(state.obraEmEdicao ? getAprovada() : 'NÃO');
       state.optionsLoaded = true;
@@ -13668,7 +13571,7 @@
     [
       'cad-sel-pi', 'cad-sel-alim-principal', 'cad-sel-caracteristicas',
       'cad-sel-manobra', 'cad-sel-novo-bay', 'cad-sel-criticidade',
-      'cad-sel-pacote', 'cad-sel-nome-projeto-combo'
+      'cad-sel-pacote'
     ].forEach(function (id) {
       var el = $(id); if (el) el.selectedIndex = -1;
     });
@@ -14001,20 +13904,6 @@
             C.populateSelect('cad-sel-caracteristicas', r.items, { allowEmpty: true });
           }
         }).catch(function () { /* silencioso */ });
-      }
-    });
-  }
-
-  // --- M045: combo Nome do Projeto -> "Melhorias_AL_" quando
-  // selecionado "Melhorias AL" (case/space insensitive).
-  var combo = $('cad-sel-nome-projeto-combo');
-  if (combo && !combo.__cadastroBound) {
-    combo.__cadastroBound = true;
-    combo.addEventListener('change', function () {
-      var raw = (combo.value || combo.options[combo.selectedIndex] && combo.options[combo.selectedIndex].text || '').trim();
-      var key = raw.toUpperCase().replace(/\s+/g, ' ');
-      if (key === 'MELHORIAS AL') {
-        C.setVal('cad-input-projeto', 'Melhorias_AL_');
       }
     });
   }
@@ -16549,12 +16438,26 @@
             var modal = document.getElementById('modal-projeto-busca');
             if (modal) modal.style.display = 'grid';
             var tbody = document.getElementById('projeto-busca-tbody');
-            if (tbody && r && r.ok) {
-              tbody.innerHTML = (r.items || []).map(function (n) {
-                return '<tr data-projeto="' + n + '" style="cursor:pointer;">'
-                  + '<td style="padding:6px 10px;">' + n + '</td>'
+            var items = (r && r.ok && r.items) ? r.items : [];
+            function render(filtro) {
+              if (!tbody) return;
+              var termo = String(filtro || '').trim().toLowerCase();
+              tbody.innerHTML = items.filter(function (n) {
+                return !termo || String(n).toLowerCase().indexOf(termo) !== -1;
+              }).map(function (n) {
+                var safe = String(n).replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+                return '<tr data-projeto="' + safe + '" style="cursor:pointer;">'
+                  + '<td style="padding:6px 10px;">' + safe + '</td>'
                   + '<td>—</td><td style="text-align:right;">—</td></tr>';
               }).join('');
+            }
+            render('');
+            var filtroInp = document.getElementById('projeto-busca-filtro');
+            if (filtroInp) {
+              filtroInp.value = '';
+              filtroInp.oninput = function () { render(filtroInp.value); };
             }
           });
         }
@@ -16708,22 +16611,6 @@
       });
     }
 
-    // [FIX 5] Esconde "Atalho de Nome do Projeto" quando combo nao
-    // tem opcoes (so o placeholder). Se apoio populou, mostra.
-    function _toggleNomeComboRow() {
-      var row = document.getElementById('cad-row-nome-combo');
-      var sel = document.getElementById('cad-sel-nome-projeto-combo');
-      if (!row || !sel) return;
-      var realOpts = 0;
-      for (var i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].value && sel.options[i].value !== '') realOpts++;
-      }
-      row.style.display = realOpts > 0 ? '' : 'none';
-    }
-    setTimeout(_toggleNomeComboRow, 300);
-    document.addEventListener('coplan:obras', function () {
-      setTimeout(_toggleNomeComboRow, 100);
-    });
   }
 
   // ---------- ESC global em modais ----------

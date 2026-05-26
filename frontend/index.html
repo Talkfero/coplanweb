@@ -1041,11 +1041,11 @@
                     <input class="input mono" id="cad-input-item" placeholder="ex.: 001" />
                   </div>
 
-                  <div class="field col-7">
+                  <div class="field col-12">
                     <label>Projeto <span class="req" data-req-conditional="distribuicao" style="display:none;">*</span></label>
                     <div class="input-row">
                       <input class="input" id="cad-input-projeto" placeholder="Nome do projeto (não pode iniciar com 'Obra')" />
-                      <button class="btn" id="cad-btn-escolher" type="button" title="Escolher pasta de arquivos da obra"><i data-lucide="folder-search"></i> Escolher</button>
+                      <button class="btn" id="cad-btn-escolher" type="button" title="Escolher um projeto existente para carregar seus dados"><i data-lucide="folder-search"></i> Escolher</button>
                       <button class="btn" id="cad-btn-templates" type="button" title="Templates de descricao"><i data-lucide="bookmark"></i> Templates</button>
                     </div>
                     <span class="helper">Não pode iniciar com "Obra".</span>
@@ -1059,12 +1059,6 @@
                       <button class="btn sm" id="cad-btn-multi-pi" data-act="nome-projeto:multi-pi" type="button" title="Selecionar multiplos PIs para esta obra"><i data-lucide="list-checks"></i> Multi-PI</button>
                     </div>
                   </div>
-                  <div class="field col-5" id="cad-row-nome-combo" title="Atalho: ao escolher um nome aqui, preenche o campo 'Projeto' acima (ex.: 'Melhorias AL' -> 'Melhorias_AL_').">
-                    <label>Atalho de Nome do Projeto</label>
-                    <select class="select" id="cad-sel-nome-projeto-combo"><option value="">— selecione —</option></select>
-                    <span class="helper">Sugestões da planilha de apoio + opções comuns.</span>
-                  </div>
-
                   <div class="field col-12">
                     <label>Observações</label>
                     <textarea class="textarea" id="cad-input-observacoes" placeholder="Notas técnicas, justificativas, anexos relacionados..."></textarea>
