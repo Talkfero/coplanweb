@@ -475,6 +475,46 @@ class CoreMixin:
     # consumidas pelo header (chips de confiabilidade) e pelos botoes
     # de export/relatorio (gating com "Ir para X").
     # ------------------------------------------------------------------
+    def _refresh_apoio_state_from_db(self) -> None:
+        """Re-deriva o estado da fonte 'apoio' diretamente do banco ATUAL
+        (tabela apoio_meta), em vez de confiar no flag em memoria -- que
+        pode ficar velho apos trocar de banco. Verde so quando o banco
+        conectado realmente tem apoio importado. So escreve quando o estado
+        muda (evita bumpar o timestamp 'validado em' a cada chamada)."""
+        ds = self._get_data_state()
+        if ds is None:
+            return
+        try:
+            from runtime.config import DataStateManager  # noqa: PLC0415
+        except Exception:  # noqa: BLE001
+            return
+        # Estado derivado do banco atual.
+        desired = DataStateManager.NAO_CARREGADO
+        path = ""
+        token = ""
+        err = "apoio nao importado neste banco"
+        try:
+            db, db_err = self._ensure_db_connected()
+        except Exception:  # noqa: BLE001
+            db, db_err = None, "db indisponivel"
+        if db is not None and not db_err:
+            try:
+                meta = self._apoio_meta_dict(db)
+            except Exception:  # noqa: BLE001
+                meta = {}
+            if meta and meta.get("last_imported_at"):
+                desired = DataStateManager.CARREGADO_VALIDADO
+                path = str(meta.get("last_path") or "")
+                token = str(meta.get("last_mtime") or 0)
+                err = ""
+        else:
+            err = "banco nao conectado"
+        cur = ds.get_state("apoio")
+        if cur and cur.state == desired and (cur.version_token or "") == token:
+            return  # sem mudanca: nao re-escreve (preserva timestamp)
+        self._data_state_set(
+            "apoio", desired, path=path, version_token=token, error=err)
+
     def data_state_get(self) -> dict[str, Any]:
         """Devolve o estado das 4 fontes (db, apoio, ganhos, tecnico_txt)
         + label/timestamp formatados para o header. JS usa isto para
@@ -488,6 +528,12 @@ class CoreMixin:
         # aparece no chip (vem de get_app_state, que le config direto).
         try:
             self._ensure_managers()
+        except Exception:  # noqa: BLE001
+            pass
+        # Estado de 'apoio' vem do banco ATUAL (apoio_meta), nao de flag
+        # velho em memoria: trocar de banco deixa de manter o chip verde.
+        try:
+            self._refresh_apoio_state_from_db()
         except Exception:  # noqa: BLE001
             pass
         ds = self._get_data_state()
