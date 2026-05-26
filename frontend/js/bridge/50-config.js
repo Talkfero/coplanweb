@@ -296,23 +296,34 @@
         return;
       }
       tb.innerHTML = rows.map(function (r) {
-        return '<tr>'
-          + '<td class="mono" style="padding:6px 10px;">' + esc(r.cod_pep) + '</td>'
+        var emUso = !!r.em_obra;
+        var badge = emUso
+          ? ' <span class="badge warning" title="Ainda vinculado a uma obra existente">em uso</span>'
+          : '';
+        return '<tr' + (emUso ? ' style="background:rgba(245,158,11,.06);"' : '') + '>'
+          + '<td class="mono" style="padding:6px 10px;">' + esc(r.cod_pep) + badge + '</td>'
           + '<td style="padding:6px 10px;">' + esc(r.empresa) + '</td>'
           + '<td class="mono" style="padding:6px 10px;text-align:right;">' + esc(r.yy) + '</td>'
           + '<td class="mono" style="padding:6px 10px;text-align:right;">' + esc(String(r.seq)) + '</td>'
           + '<td class="mono" style="padding:6px 10px;">' + esc(r.obra_cod) + '</td>'
           + '<td style="padding:6px 10px;color:var(--text-soft);">' + esc(r.emitido_em) + '</td>'
           + '<td style="padding:6px 10px;text-align:right;">'
-          + '<button class="btn sm danger" data-emp="' + esc(r.empresa) + '" data-yy="' + esc(r.yy) + '" data-seq="' + esc(String(r.seq)) + '" title="Remover (libera o SSSS deste ano)"><i data-lucide="trash-2"></i></button>'
+          + '<button class="btn sm danger" data-emp="' + esc(r.empresa) + '" data-yy="' + esc(r.yy) + '" data-seq="' + esc(String(r.seq)) + '" data-emuso="' + (emUso ? '1' : '0') + '" title="Remover do registro"><i data-lucide="trash-2"></i></button>'
           + '</td></tr>';
       }).join('');
       if (window.lucide) lucide.createIcons();
       tb.querySelectorAll('button[data-seq]').forEach(function (b) {
         b.onclick = function () {
-          if (!window.confirm('Remover ' + b.getAttribute('data-emp') + '-'
-              + b.getAttribute('data-yy') + '-' + b.getAttribute('data-seq')
-              + ' do registro?\nO SSSS volta a ficar disponivel naquele ano.')) return;
+          var ref = b.getAttribute('data-emp') + '-'
+            + b.getAttribute('data-yy') + '-' + b.getAttribute('data-seq');
+          var msg = b.getAttribute('data-emuso') === '1'
+            ? ('ATENCAO: ' + ref + ' ainda esta vinculado a uma OBRA '
+               + 'existente.\nRemover do registro NAO libera o SSSS '
+               + 'enquanto a obra usar este COD_PEP (a obra continua valendo).'
+               + '\n\nRemover mesmo assim?')
+            : ('Remover ' + ref + ' do registro?\n'
+               + 'O SSSS volta a ficar disponivel naquele ano.');
+          if (!window.confirm(msg)) return;
           api.cod_pep_ledger_remove(
             b.getAttribute('data-emp'), b.getAttribute('data-yy'),
             b.getAttribute('data-seq')).then(function (r) {

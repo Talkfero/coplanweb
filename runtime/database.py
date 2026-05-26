@@ -2453,6 +2453,22 @@ class DatabaseManager:
                      "emitido_em": r[5] or ""}
                     for r in cursor.fetchall()
                 ]
+                # Marca quais cod_pep ainda estao vinculados a uma obra
+                # existente (remover do registro nao "libera" enquanto a
+                # obra usar aquele cod_pep).
+                obras_set: set[str] = set()
+                try:
+                    cursor.execute(
+                        "SELECT cod_pep FROM obras "
+                        "WHERE cod_pep IS NOT NULL AND TRIM(cod_pep)<>''"
+                    )
+                    for (cp,) in cursor.fetchall():
+                        obras_set.add(str(cp or "").strip().upper())
+                except Exception:  # noqa: BLE001
+                    obras_set = set()
+                for row in rows:
+                    row["em_obra"] = (
+                        str(row["cod_pep"]).strip().upper() in obras_set)
             except Exception as exc:  # noqa: BLE001
                 LOGGER.warning("cod_pep_ledger_list: %s", exc)
                 return [], 0
