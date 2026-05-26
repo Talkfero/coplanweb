@@ -290,21 +290,18 @@ class CadastroMixin:
     # Cadastro / metodos auxiliares (leva 2 da migracao desktop->web).
     # Origem: ui/main_window/cadastro_mixin.py + apoio_mixin.py.
     # M020 cadastro_form_metadata, M021 caracteristicas_por_alimentador,
-    # M024 validar_cadastro, M025 resolver_pi_base,
-    # M026 nome_projeto_options, M029 tecnico_snapshot.
+    # M024 validar_cadastro, M025 resolver_pi_base, M029 tecnico_snapshot.
     # ------------------------------------------------------------------
 
     def cadastro_form_metadata(self) -> dict[str, Any]:
         """[M020] Agregador especifico do cadastro: estende
         get_form_metadata com listas hardcoded do desktop
         (manobra/aprovada/novo_bay/criticidade), o range de Ano
-        (current..+10) e a lista de nomes_projeto (banco + apoio +
-        'Melhorias AL'). Reaproveita get_form_metadata para os combos
+        (current..+10). Reaproveita get_form_metadata para os combos
         comuns (PI, regionais, pacotes, alimentadores, caracteristicas)."""
         from datetime import datetime as _dt
         ano_atual = _dt.now().year
         meta = self.get_form_metadata()
-        nomes_proj = self.nome_projeto_options()
         return {
             "ok": True, "error": "",
             "ano_range":     [str(y) for y in range(ano_atual, ano_atual + 11)],
@@ -320,7 +317,6 @@ class CadastroMixin:
             "aprovada":        ["NÃO", "SIM"],
             "novo_bay":        ["NÃO", "SIM"],
             "criticidade":     ["Baixa", "Média", "Alta"],
-            "nomes_projeto":   nomes_proj.get("items") or ["Melhorias AL"],
         }
 
     def caracteristicas_por_alimentador(self, alim: Any) -> dict[str, Any]:
@@ -451,27 +447,3 @@ class CadastroMixin:
         return {"ok": True, "pi_base": base, "conhecido": conhecido,
                 "error": ""}
 
-    def nome_projeto_options(self) -> dict[str, Any]:
-        """[M026] Lista de nomes_projeto para o combo, ordenada e dedup
-        case-insensitive, com 'Melhorias AL' no fim. Reaproveita
-        list_projetos (DISTINCT do banco) + apoio. Replica
-        apoio_mixin.populate_combo_nome_projeto."""
-        cache = getattr(self, "_apoio_cache", None) or {}
-        pre = cache.get("nomes_projetos_pre_definidos") or []
-        try:
-            db_lst = self.list_projetos()
-            nomes_db = list(db_lst.get("items") or [])
-        except Exception:  # noqa: BLE001
-            nomes_db = []
-        seen: dict[str, str] = {}
-        for src in (pre, nomes_db):
-            for nome in src:
-                key = str(nome or "").strip().upper()
-                if not key:
-                    continue
-                if key not in seen:
-                    seen[key] = str(nome).strip()
-        items = sorted(seen.values(), key=lambda s: s.upper())
-        if not any(v.upper() == "MELHORIAS AL" for v in items):
-            items.append("Melhorias AL")
-        return {"ok": True, "items": items, "error": ""}
