@@ -1361,10 +1361,11 @@ class BancoMixin:
 
     def cod_pep_ledger_list(
         self, termo: Any = "", empresa: Any = "", yy: Any = "",
-        limit: Any = 1000, offset: Any = 0,
+        status: Any = "", limit: Any = 1000, offset: Any = 0,
     ) -> dict[str, Any]:
         """Lista o registro de PEPs emitidos (cod_pep_emitidos) com filtros
-        opcionais. Retorna {ok, rows, total, error}."""
+        opcionais (status = ''|'liberavel'|'em_uso'). Retorna
+        {ok, rows, total, error}."""
         db, err = self._ensure_db_connected()
         if err or db is None:
             return {"ok": False, "rows": [], "total": 0,
@@ -1372,8 +1373,8 @@ class BancoMixin:
         try:
             rows, total = db.cod_pep_ledger_list(
                 termo=str(termo or ""), empresa=str(empresa or ""),
-                yy=str(yy or ""), limit=int(limit or 1000),
-                offset=int(offset or 0),
+                yy=str(yy or ""), status=str(status or ""),
+                limit=int(limit or 1000), offset=int(offset or 0),
             )
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "rows": [], "total": 0,

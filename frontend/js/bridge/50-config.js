@@ -261,6 +261,11 @@
       + '<div class="row" style="display:flex;gap:6px;flex-wrap:wrap;">'
       + '<input id="cpl-filtro" class="input" placeholder="Filtrar por COD_PEP ou obra..." style="flex:1;min-width:200px;"/>'
       + '<input id="cpl-yy" class="input mono" placeholder="Ano (YY)" style="width:90px;"/>'
+      + '<select id="cpl-status" class="select" style="width:160px;" title="Filtrar por vinculo com obra">'
+      + '<option value="">Todos</option>'
+      + '<option value="liberavel">Só liberáveis</option>'
+      + '<option value="em_uso">Em uso</option>'
+      + '</select>'
       + '</div>'
       + '<div style="border:1px solid var(--border);border-radius:6px;overflow:auto;max-height:48vh;">'
       + '<table class="data-table" style="width:100%;font-size:12px;">'
@@ -336,7 +341,8 @@
 
     function reload() {
       api.cod_pep_ledger_list(
-        byId('cpl-filtro').value || '', '', byId('cpl-yy').value || '', 1000, 0
+        byId('cpl-filtro').value || '', '', byId('cpl-yy').value || '',
+        byId('cpl-status').value || '', 1000, 0
       ).then(function (r) {
         if (r && r.ok) render(r.rows || [], r.total || 0);
         else toast('Falha: ' + (r && r.error || '?'), 'error');
@@ -347,6 +353,7 @@
     function debounced() { clearTimeout(t); t = setTimeout(reload, 250); }
     byId('cpl-filtro').oninput = debounced;
     byId('cpl-yy').oninput = debounced;
+    byId('cpl-status').onchange = reload;
     byId('cpl-add').onclick = function () {
       var v = (byId('cpl-novo').value || '').trim();
       if (!v) return toast('Informe um COD_PEP', 'warn');

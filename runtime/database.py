@@ -2411,11 +2411,12 @@ class DatabaseManager:
 
     def cod_pep_ledger_list(
         self, termo: str = "", empresa: str = "", yy: str = "",
-        limit: int = 1000, offset: int = 0,
+        status: str = "", limit: int = 1000, offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
         """Lista o registro de PEPs emitidos com filtros opcionais
-        (termo casa cod_pep/obra_cod; empresa e yy exatos). Retorna
-        (linhas, total) -- total ignora limit/offset (para paginacao)."""
+        (termo casa cod_pep/obra_cod; empresa e yy exatos; status =
+        ''|'liberavel'|'em_uso'). Retorna (linhas, total) -- total ignora
+        limit/offset (para paginacao)."""
         self._ensure_cod_pep_ledger()
         with self._with_connection():
             cursor = self._get_cursor()
@@ -2436,6 +2437,16 @@ class DatabaseManager:
                 where.append("(UPPER(cod_pep) LIKE ? OR UPPER(obra_cod) LIKE ?)")
                 like = "%" + termo_s.upper() + "%"
                 params.extend([like, like])
+            # Filtro por status (vinculo com obra existente).
+            status_s = str(status or "").strip().lower()
+            _obras_sub = (
+                "SELECT UPPER(TRIM(cod_pep)) FROM obras "
+                "WHERE cod_pep IS NOT NULL AND TRIM(cod_pep)<>''"
+            )
+            if status_s == "em_uso":
+                where.append(f"UPPER(TRIM(cod_pep)) IN ({_obras_sub})")
+            elif status_s == "liberavel":
+                where.append(f"UPPER(TRIM(cod_pep)) NOT IN ({_obras_sub})")
             wsql = (" WHERE " + " AND ".join(where)) if where else ""
             try:
                 cursor.execute(
