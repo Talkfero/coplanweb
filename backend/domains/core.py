@@ -503,10 +503,28 @@ class CoreMixin:
             except Exception:  # noqa: BLE001
                 meta = {}
             if meta and meta.get("last_imported_at"):
-                desired = DataStateManager.CARREGADO_VALIDADO
-                path = str(meta.get("last_path") or "")
-                token = str(meta.get("last_mtime") or 0)
-                err = ""
+                last_path = str(meta.get("last_path") or "")
+                stored_mtime = int(meta.get("last_mtime") or 0)
+                path = last_path
+                # Desatualizado: o xlsx em disco mudou (mtime maior) desde
+                # a importacao -> amarelo (parcial), pedindo reimportacao.
+                cur_mtime = None
+                try:
+                    if last_path and os.path.exists(last_path):
+                        cur_mtime = int(os.path.getmtime(last_path))
+                except OSError:
+                    cur_mtime = None
+                if cur_mtime is not None and cur_mtime > stored_mtime:
+                    desired = DataStateManager.CARREGADO_PARCIAL
+                    token = str(cur_mtime)
+                    err = (
+                        "apoio.xlsx foi alterado desde a importacao -- "
+                        "use 'Atualizar apoio' para reimportar."
+                    )
+                else:
+                    desired = DataStateManager.CARREGADO_VALIDADO
+                    token = str(stored_mtime)
+                    err = ""
         else:
             err = "banco nao conectado"
         cur = ds.get_state("apoio")

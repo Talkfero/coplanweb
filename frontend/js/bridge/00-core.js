@@ -138,6 +138,7 @@
       lines.push('Status: OK (operacional)');
     } else if (state === 'CARREGADO_PARCIAL') {
       lines.push('Status: Parcialmente carregado');
+      if (info.error_last) lines.push('Detalhe: ' + info.error_last);
       lines.push(SOURCE_FIX_HINT[source] || '');
     } else if (state === 'INVALIDADO') {
       lines.push('Status: ERRO');
