@@ -3562,7 +3562,7 @@
     ['Criticidade',               'nivel_criticidade',       'select_or_input'],
     ['Pacote',                    'tipo_pacote',             'select_or_input'],
     ['Valor da Obra',             'valor_obra',              'input'],
-    ['COD_PEP',                   '__cod',                   'input'],   // usa o cod como display
+    ['COD_PEP',                   'cod_pep',                 'input'],   // COD_PEP sequencial real (coluna cod_pep)
   ];
   function norm(s) {
     return String(s || '').trim().toLowerCase()
@@ -3713,7 +3713,7 @@
     var o = payload.obra;
     FIELD_MAP.forEach(function (m) {
       var label = m[0], col = m[1];
-      var v = (col === '__cod') ? (o.cod || '') : (o[col] == null ? '' : o[col]);
+      var v = (o[col] == null ? '' : o[col]);
       var node = findFieldByLabel(scope, label);
       if (node) setNodeValue(node, v);
     });
@@ -13642,7 +13642,7 @@
       ['cad-sel-criticidade',         obra.nivel_criticidade],
       ['cad-sel-pacote',              obra.tipo_pacote],
       ['cad-input-valor',             fmtValorBr(obra.valor_obra)],
-      ['cad-input-cod-pep',           obra.cod]
+      ['cad-input-cod-pep',           obra.cod_pep]
     ];
     fields.forEach(function (kv) { setVal(kv[0], kv[1]); });
     setAprovada(obra.obra_aprovada || 'NÃO');
