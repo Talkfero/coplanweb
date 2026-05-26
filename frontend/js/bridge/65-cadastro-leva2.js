@@ -776,9 +776,22 @@
     var parametros = pares.map(function (p) {
       return { label: p[0], a: _v(p[1]), d: _v(p[2]) };
     });
+    // Single-value: Contas Contratos Beneficiadas (sem Antes/Depois).
+    parametros.push({
+      label: 'Contas Contratos Beneficiadas',
+      single: true,
+      a: _v('contas_contratos_beneficiadas'),
+      d: ''
+    });
     // Quando TODOS estao vazios, mostra placeholder ([]) — coplanRender
     // ja sabe lidar com vazio.
     var anyData = parametros.some(function (p) { return p.a || p.d; });
+    // [FIX] Persiste no estado canonico para que re-renders posteriores
+    // (recalc de criterios, coplan:tab='ganhos') NAO apaguem os ganhos
+    // salvos da obra -- esses caminhos re-renderizam a partir de
+    // window.__coplanGanhosLastFile.parametros.
+    window.__coplanGanhosLastFile = window.__coplanGanhosLastFile || {};
+    window.__coplanGanhosLastFile.parametros = anyData ? parametros : [];
     window.coplanRenderGanhosTbody(anyData ? parametros : []);
   }
   // [FIX] populateTbodyFromObra exposto via window.coplanGanhos abaixo
