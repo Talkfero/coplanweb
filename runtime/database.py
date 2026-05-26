@@ -2159,7 +2159,7 @@ class DatabaseManager:
                 LOGGER.warning("Sigla de empresa indisponível para preencher COD_PEP: %s", exc)
 
             cursor.execute(
-                "SELECT cod, ano_, nome_projeto, codigo_item, nome_regional, novo_bay, empresa, cod_pep FROM obras"
+                "SELECT cod, ano_, nome_projeto, codigo_item, nome_regional, novo_bay, tipo_pacote, empresa, cod_pep FROM obras"
             )
             rows = cursor.fetchall()
             if not rows:
@@ -2185,7 +2185,7 @@ class DatabaseManager:
                 ),
             )
 
-            for cod, ano_, nome_projeto, codigo_item, nome_regional, novo_bay, empresa, cod_atual in rows:
+            for cod, ano_, nome_projeto, codigo_item, nome_regional, novo_bay, tipo_pacote, empresa, cod_atual in rows:
                 cod_id = str(cod or "").strip() or "<sem-cod>"
                 empresa_norm = normalize_text(empresa)
                 cod_pep_atual = str(cod_atual or "").strip()
@@ -2223,6 +2223,7 @@ class DatabaseManager:
                     "codigo_item": codigo_item,
                     "nome_regional": nome_regional,
                     "novo_bay": novo_bay,
+                    "tipo_pacote": tipo_pacote,
                     "empresa": empresa_norm,
                 }
                 try:
