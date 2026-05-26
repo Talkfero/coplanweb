@@ -291,6 +291,8 @@
     +   '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
     +     '<button id="coplan-btn-cod-pep-pendentes" class="btn">'
     +       '<i data-lucide="play-circle"></i> Preencher pendentes</button>'
+    +     '<button id="coplan-btn-cod-pep-zerar" class="btn danger">'
+    +       '<i data-lucide="trash-2"></i> Zerar base</button>'
     +   '</div>'
     + '</div>'
 
@@ -464,6 +466,34 @@
         if (window.coplanReportError) {
           window.coplanReportError(
             'Preencher COD_PEP pendentes', 'cod_pep_preencher_pendentes',
+            { error: String((err && err.message) || err || '?') });
+        }
+      });
+    });
+    bind('coplan-btn-cod-pep-zerar', function () {
+      if (!(api && api.cod_pep_zerar)) return toast('API indisponivel', 'error');
+      var typed = window.prompt(
+        'ZERAR COD_PEP DE TODA A BASE.\n'
+        + 'Esta acao apaga o COD_PEP de TODAS as obras (inclusive '
+        + 'despachadas) e nao pode ser desfeita.\n\n'
+        + 'Digite ZERAR para confirmar:', '');
+      if (!typed || typed.trim().toUpperCase() !== 'ZERAR') {
+        return toast('Cancelado (confirmacao invalida)', 'warn');
+      }
+      toast('Zerando COD_PEP da base...', 'info');
+      api.cod_pep_zerar('ZERAR').then(function (r) {
+        if (r && r.ok) {
+          toast(r.zerados + ' COD_PEP zerado(s)', 'info');
+          if (window.coplanLoadObras) window.coplanLoadObras();
+        } else {
+          toast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+      }).catch(function (err) {
+        toast('Falha ao zerar COD_PEP: '
+              + ((err && err.message) || err || '?'), 'error');
+        if (window.coplanReportError) {
+          window.coplanReportError(
+            'Zerar COD_PEP', 'cod_pep_zerar',
             { error: String((err && err.message) || err || '?') });
         }
       });

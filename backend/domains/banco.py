@@ -1322,6 +1322,30 @@ class BancoMixin:
             return out
         return {"ok": True, "preenchidos": preenchidos, "error": ""}
 
+    def cod_pep_zerar(self, confirmacao: Any = "") -> dict[str, Any]:
+        """Zera o COD_PEP de TODAS as obras (acao destrutiva de admin).
+        Exige confirmacao == 'ZERAR' (trava anti-acidente, espelha o
+        'EXCLUIR' da exclusao). Retorna {ok, zerados}."""
+        if str(confirmacao or "").strip().upper() != "ZERAR":
+            return {"ok": False, "zerados": 0,
+                    "error": "confirmacao invalida: digite ZERAR"}
+        db, err = self._ensure_db_connected()
+        if err or db is None:
+            return {"ok": False, "zerados": 0,
+                    "error": err or "db indisponivel"}
+        try:
+            zerados = int(db.zerar_cod_pep() or 0)
+        except Exception as exc:  # noqa: BLE001
+            friendly = self._friendly_busy_error(exc)
+            out: dict[str, Any] = {
+                "ok": False, "zerados": 0,
+                "error": friendly or f"zerar_cod_pep: {exc}",
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
+        return {"ok": True, "zerados": zerados, "error": ""}
+
     # --- Fase 6: CSV import/export -----------------------------------
 
     def csv_export(self, destino: Any = "") -> dict[str, Any]:

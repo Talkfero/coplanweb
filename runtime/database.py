@@ -2268,6 +2268,34 @@ class DatabaseManager:
         )
         return preenchidos
 
+    @run_write_in_qthread_if_ui_thread
+    @with_lock_action("Zerar COD_PEP da base")
+    @retry_on_busy()
+    def zerar_cod_pep(self) -> int:
+        """Esvazia o COD_PEP de TODAS as obras (acao destrutiva de admin).
+        Retorna a contagem de obras afetadas. Apos zerar, a numeracao
+        recomeca do menor SSSS disponivel (0000) na proxima geracao."""
+        afetadas = 0
+        with self._with_connection():
+            cursor = self._get_cursor()
+            if not cursor:
+                return 0
+            cols = self.get_column_names()
+            if "cod_pep" not in cols:
+                return 0
+            cod_pep_sql = self._escape_identifier("cod_pep")
+            with self.write_transaction():
+                cursor.execute(
+                    f"UPDATE obras SET {cod_pep_sql}='' "
+                    f"WHERE {cod_pep_sql} IS NOT NULL "
+                    f"AND TRIM({cod_pep_sql})<>''"
+                )
+                afetadas = int(cursor.rowcount or 0)
+        self._refresh_cache()
+        LOGGER.info("zerar_cod_pep: obras afetadas=%s", afetadas)
+        print(f"COD_PEP ZERAR: afetadas={afetadas}")
+        return afetadas
+
     def count_tecnico_dirty(self, pacotes=None) -> int:
         """Conta obras com dados técnicos desatualizados."""
         if pacotes is None:
