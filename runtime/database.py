@@ -641,8 +641,13 @@ def cod_pep(
             f"Valor calculado: {agrup}."
         )
 
-    # SSSS é único por empresa em toda a base: consulta GLOBAL, sem escopo.
-    max_seq = -1
+    # SSSS é único por empresa em toda a base (consulta GLOBAL, sem escopo).
+    # Aloca o MENOR sequencial disponível (preenche buracos): coleta os
+    # SSSS em uso e escolhe o primeiro inteiro >= 0 que não está ocupado.
+    # Garante unicidade global e reaproveita faixas livres antes de avançar
+    # (ex.: 125..499 livres com 500..888 ocupados -> usa 125, depois 889).
+    # Sequenciais já existentes nunca mudam (obra despachada não volta atrás).
+    used_seqs: set[int] = set()
     cursor.execute(
         "SELECT cod_pep FROM obras "
         "WHERE empresa=? "
@@ -652,12 +657,13 @@ def cod_pep(
     for (cod_existente,) in cursor.fetchall():
         parsed = parse_cod_pep(cod_existente)
         if parsed and parsed["empresa"] == empresa:
-            max_seq = max(max_seq, int(parsed["seq"]))
-    seq = max_seq + 1
+            used_seqs.add(int(parsed["seq"]))
+    seq = 0
+    while seq in used_seqs:
+        seq += 1
     if not (0 <= int(seq) <= 9999):
         raise ValueError(
-            f"Limite de sequencial SSSS excedido para empresa {empresa}. "
-            f"Valor calculado: {seq}."
+            f"Não há sequencial SSSS livre (0000-9999) para empresa {empresa}."
         )
 
     bay_local = obra.get("novo_bay")
