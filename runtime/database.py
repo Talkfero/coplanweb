@@ -918,7 +918,10 @@ class DatabaseManager:
         t_total = ts_now()
         if not self.db_path:
             return
-        if self.data_access_layer is None:
+        # Recria o DAL quando e None OU aponta para outro banco (troca de
+        # banco) -- senao continuaria lendo o banco anterior.
+        if (self.data_access_layer is None
+                or getattr(self.data_access_layer, "db_path", None) != self.db_path):
             t_dal = ts_now()
             self.data_access_layer = DataAccessLayer(
                 self.db_path,
@@ -938,7 +941,11 @@ class DatabaseManager:
     def _refresh_cache(self) -> None:
         if not self.db_path:
             return
-        if self.data_access_layer is None:
+        # Recria o DAL quando ele e None OU aponta para outro banco (troca
+        # de banco): o ObraReadRepo guarda db_path no construtor, entao
+        # reusar o antigo releria o banco anterior.
+        if (self.data_access_layer is None
+                or getattr(self.data_access_layer, "db_path", None) != self.db_path):
             self.data_access_layer = DataAccessLayer(
                 self.db_path,
                 self.columns,
