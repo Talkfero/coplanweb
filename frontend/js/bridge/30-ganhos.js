@@ -737,46 +737,65 @@
   // Le o estado atual da tabela #ganhos-tbody (celulas de texto) num mapa
   // por label normalizado, para preservar a coluna que nao esta sendo
   // recalculada (ex.: ao clicar "Depois" nao perde os valores "Antes").
-  function readTableModel() {
-    var model = {};
-    var tbody = document.getElementById('ganhos-tbody');
-    if (!tbody) return model;
-    tbody.querySelectorAll('tr').forEach(function (tr) {
-      if (!tr.children.length) return;
-      var label = (tr.children[0].textContent || '').trim();
-      if (!label) return;
-      var ca = tr.querySelector('.col-antes');
-      var cd = tr.querySelector('.col-depois');
-      model[normLabel(label)] = {
-        label: label,
-        single: !ca && !cd,
-        a: ca ? ca.textContent.trim() : '',
-        d: cd ? cd.textContent.trim() : ''
-      };
-    });
-    return model;
-  }
-  // Aplica os valores calculados (mapa label->valor) na coluna 'a' ou 'd'
-  // e re-renderiza a tabela preservando a outra coluna.
+  // Estado canonico da tabela de ganhos, compartilhado com o fluxo de
+  // arquivo (Passo 5.2): window.__coplanGanhosLastFile.parametros. Aplica
+  // os valores calculados na coluna 'a'/'d' preservando a OUTRA coluna e
+  // os campos single (beneficiadas), persiste no estado e re-renderiza.
+  // Usar o mesmo estado evita que uma recalc de criterios re-renderize a
+  // partir de dados antigos e apague a coluna recem preenchida.
   function applyColumn(vals, slot) {
-    var model = readTableModel();
+    var store = window.__coplanGanhosLastFile || {};
+    var byKey = {};
+    // Camada base: o que esta visivel na tabela (ex.: obra carregada via
+    // populateTbodyFromObra, que renderiza sem mexer no estado).
+    var tbody = document.getElementById('ganhos-tbody');
+    if (tbody) {
+      tbody.querySelectorAll('tr').forEach(function (tr) {
+        if (!tr.children.length) return;
+        var label = (tr.children[0].textContent || '').trim();
+        if (!label) return;
+        var ca = tr.querySelector('.col-antes');
+        var cd = tr.querySelector('.col-depois');
+        var single = !ca && !cd;
+        byKey[normLabel(label)] = {
+          label: label,
+          single: single,
+          a: ca ? ca.textContent.trim()
+               : (single ? (tr.children[1] ? tr.children[1].textContent.trim() : '') : ''),
+          d: cd ? cd.textContent.trim() : ''
+        };
+      });
+    }
+    // Camada autoritativa: estado canonico compartilhado.
+    (store.parametros || []).forEach(function (p) {
+      var k = normLabel(p.label || '');
+      if (k) byKey[k] = Object.assign({}, p);
+    });
+    (window.coplanGanhosDefaultRows || []).forEach(function (def) {
+      var k = normLabel(def.label);
+      if (!byKey[k]) {
+        byKey[k] = { label: def.label, single: !!def.single, a: '', d: '' };
+      }
+    });
     Object.keys(vals).forEach(function (label) {
       var k = normLabel(label);
-      if (!model[k]) model[k] = { label: label, single: false, a: '', d: '' };
-      var v = vals[label];
-      model[k][slot] = (v == null ? '' : String(v));
+      if (!byKey[k]) byKey[k] = { label: label, single: false, a: '', d: '' };
+      var s = (vals[label] == null ? '' : String(vals[label]));
+      if (byKey[k].single) byKey[k].a = s;
+      else byKey[k][slot] = s;
     });
-    var defaults = window.coplanGanhosDefaultLabels || [];
     var rows = [];
     var used = {};
-    defaults.forEach(function (label) {
-      var k = normLabel(label);
+    (window.coplanGanhosDefaultRows || []).forEach(function (def) {
+      var k = normLabel(def.label);
       used[k] = 1;
-      rows.push(model[k] || { label: label, single: false, a: '', d: '' });
+      rows.push(byKey[k]);
     });
-    Object.keys(model).forEach(function (k) {
-      if (!used[k]) rows.push(model[k]);
+    Object.keys(byKey).forEach(function (k) {
+      if (!used[k]) rows.push(byKey[k]);
     });
+    store.parametros = rows;
+    window.__coplanGanhosLastFile = store;
     if (typeof window.coplanRenderGanhosTbody === 'function') {
       window.coplanRenderGanhosTbody(rows);
     }
@@ -861,7 +880,8 @@
       'CHI':                    fmt(r.chi, 4),
       'CI':                     fmt(r.ci, 4),
       'Tensao Maxima':          fmt(r.tensao_max, 4),
-      'Ganhos Totais':          r.ganhos_totais || ''
+      'Ganhos Totais':          r.ganhos_totais || '',
+      'Contas Contratos Beneficiadas': (r.contas_benef == null ? '' : r.contas_benef)
     }, 'a');
   }
   function applyMetricasDepois(r) {
