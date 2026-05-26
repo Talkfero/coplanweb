@@ -1011,6 +1011,41 @@
         },
       });
 
+      // COD_PEP para TODO o filtro atual (nao so a pagina visivel): pega
+      // todos os cods da lista filtrada completa (window.coplanObras). O
+      // backend ordena por ano/projeto/item, entao a contagem fica certa
+      // mesmo gerando tudo de uma vez, independente da paginacao.
+      var __filtroTodos = (window.coplanObras || [])
+        .map(function (o) { return o && o.cod; })
+        .filter(Boolean);
+      if (__filtroTodos.length > cods.length) {
+        items.push({
+          label: 'Gerar COD_PEP p/ TODO o filtro (' + __filtroTodos.length + ')',
+          icon: 'hash',
+          action: function () {
+            if (!api.cod_pep_gerar_lote) return toast('API indisponivel', 'error');
+            if (!window.confirm(
+                'Gerar COD_PEP para TODAS as ' + __filtroTodos.length
+                + ' obra(s) do filtro atual (somente vazios)?\n\n'
+                + 'Inclui obras fora da pagina visivel. A ordem '
+                + '(ano/projeto/item) e aplicada pelo sistema.')) return;
+            toast('Gerando COD_PEP para o filtro...', 'info');
+            api.cod_pep_gerar_lote(__filtroTodos, '', true, false).then(function (r) {
+              if (r && r.ok) {
+                toast(r.atualizados + ' atualizadas / '
+                      + r.ignorados + ' ignoradas', 'info');
+                if (window.coplanLoadObras) window.coplanLoadObras();
+              } else {
+                toast('Falha: ' + ((r && r.erros || ['?']).slice(0, 2).join('; ')),
+                      'error');
+              }
+            }).catch(function (err) {
+              toast('Falha: ' + (err && err.message || err || '?'), 'error');
+            });
+          },
+        });
+      }
+
       items.push('-');
 
       // ---- Exclusao (perigoso) ------------------------------------
