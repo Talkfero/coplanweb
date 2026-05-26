@@ -22,7 +22,12 @@
   `build_html()` → `_read_bridge_js()` (concatena os `bridge/*.js` em ordem
   alfabética — o prefixo numérico define a ordem — e anexa antes de `</body>`;
   nunca modifica os arquivos). O JS chama o backend via
-  `window.pywebview.api.<metodo>()`.
+  `window.pywebview.api.<metodo>()`. **A aba "Ganhos" foi integrada à aba
+  "Cadastro"** (mesma página, abaixo do formulário) — não há mais aba/atalho
+  próprios; os elementos seguem com `id="tab-ganhos"` (sem classe `tab-panel`).
+  Ao abrir o Cadastro, dispara-se também `coplan:tab` `name='ganhos'` para
+  inicializar os listeners de ganhos. Os cards do Cadastro (incl. os de ganhos,
+  Critérios e "Arquivos de ganhos (Interplan)") são colapsáveis pelo título.
 - **Backend**: classe `CoplanApi` em `backend/api.py`, **composta por mixins de
   domínio** em `backend/domains/*.py` (`core`, `obras`, `apoio`, `valor`,
   `cadastro`, `tecnico`, `ganhos`, `criterios`, `resumos`, `config`, `banco`,
@@ -39,7 +44,10 @@
   (`["obras"]`). A camada de acesso é `core/repositories/obra_read_repo.py`
   (`ObraReadRepo`, aliased como `DataAccessLayer`): cache em memória das obras
   (`load_cache`, `get_rows`, `get_by_cod`, `count_tecnico_dirty`, etc.),
-  ordenando por `ano_, nome_projeto, codigo_item`.
+  ordenando por `ano_, nome_projeto, codigo_item`. O DAL **guarda o `db_path` no
+  construtor**; ao trocar de banco, `DatabaseManager._refresh_cache` /
+  `_ensure_cache_loaded` o **recriam quando `db_path` muda** (senão releria o
+  banco anterior).
 
 ## Como rodar
 
@@ -169,6 +177,23 @@ min/max, carregamento, CHI, CI). `avaliar_ganhos_planejamento` espelha o
 `_obra_atende` do desktop e retorna `{ok, atende, motivos}`. Campos de ganhos
 antes/depois/atual definidos em `core/services/obra_rules.py`
 (`GANHOS_ANTES_FIELDS`, `GANHOS_DEPOIS_FIELDS`).
+
+### Ano dos arquivos do Interplan (ganhos)
+O cabeçalho do `FlowMT.TXT` traz `Ano: AAAA`. Esse ano é validado contra o
+`ano_` da obra ao inserir ganhos (`backend/domains/ganhos.py`):
+- **Inserir Ganhos Antes/Depois** (`ganhos_compute_antes/_depois`): o ano do
+  arquivo deve ser **igual** ao ano da obra (`_ganhos_validar_ano`).
+- **Preencher parâmetros atuais / registrados** (`ganhos_compute_atual`): o ano
+  do arquivo deve ser **anterior** (menor) ao da obra (`_ganhos_validar_ano_registrado`).
+
+Divergência → `{"ok": False, "ano_mismatch": True, ...}`; o front bloqueia
+(alerta + toast) e não preenche. Só bloqueia quando ambos os anos estão
+presentes. O front passa o ano via `cad-sel-ano` (4º argumento das chamadas).
+A tabela de ganhos (`#ganhos-tbody`) usa o estado canônico
+`window.__coplanGanhosLastFile.parametros`; as células viram `<input
+data-ganhos-input="antes|depois">` (wrap em `65-cadastro-leva2.js`) — leia/
+escreva por coluna (`readDisplayedRows`/`applyColumn`), **nunca cruze**
+antes↔depois.
 
 ### Auditoria de mudanças
 `CAMPOS_CRITICOS_MUDANCA` (`core/services/obra_rules.py`): `pi_base`, `ano_`,
