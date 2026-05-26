@@ -737,40 +737,45 @@
   // Le o estado atual da tabela #ganhos-tbody (celulas de texto) num mapa
   // por label normalizado, para preservar a coluna que nao esta sendo
   // recalculada (ex.: ao clicar "Depois" nao perde os valores "Antes").
-  // Estado canonico da tabela de ganhos, compartilhado com o fluxo de
-  // arquivo (Passo 5.2): window.__coplanGanhosLastFile.parametros. Aplica
-  // os valores calculados na coluna 'a'/'d' preservando a OUTRA coluna e
-  // os campos single (beneficiadas), persiste no estado e re-renderiza.
-  // Usar o mesmo estado evita que uma recalc de criterios re-renderize a
-  // partir de dados antigos e apague a coluna recem preenchida.
-  function applyColumn(vals, slot) {
-    var store = window.__coplanGanhosLastFile || {};
-    var byKey = {};
-    // Camada base: o que esta visivel na tabela (ex.: obra carregada via
-    // populateTbodyFromObra, que renderiza sem mexer no estado).
+  // Le os valores ATUAIS exibidos na tabela #ganhos-tbody. As celulas
+  // podem ser <input data-ganhos-input="antes|depois"> (wrap da leva2) OU
+  // texto (.col-antes/.col-depois). Le os inputs PRIMEIRO -- sao a fonte
+  // real do que esta na tela (inclui edicao manual e obra carregada).
+  // Cada coluna e lida de forma independente: NUNCA cruza antes<->depois.
+  function readDisplayedRows() {
+    var model = {};
     var tbody = document.getElementById('ganhos-tbody');
-    if (tbody) {
-      tbody.querySelectorAll('tr').forEach(function (tr) {
-        if (!tr.children.length) return;
-        var label = (tr.children[0].textContent || '').trim();
-        if (!label) return;
-        var ca = tr.querySelector('.col-antes');
-        var cd = tr.querySelector('.col-depois');
-        var single = !ca && !cd;
-        byKey[normLabel(label)] = {
-          label: label,
-          single: single,
-          a: ca ? ca.textContent.trim()
-               : (single ? (tr.children[1] ? tr.children[1].textContent.trim() : '') : ''),
-          d: cd ? cd.textContent.trim() : ''
-        };
-      });
-    }
-    // Camada autoritativa: estado canonico compartilhado.
-    (store.parametros || []).forEach(function (p) {
-      var k = normLabel(p.label || '');
-      if (k) byKey[k] = Object.assign({}, p);
+    if (!tbody) return model;
+    var singleByKey = {};
+    (window.coplanGanhosDefaultRows || []).forEach(function (def) {
+      singleByKey[normLabel(def.label)] = !!def.single;
     });
+    tbody.querySelectorAll('tr').forEach(function (tr) {
+      if (tr.children.length < 2) return;  // ignora linha placeholder
+      var label = (tr.children[0].textContent || '').trim();
+      if (!label) return;
+      var k = normLabel(label);
+      var single = singleByKey[k];
+      var aInp = tr.querySelector('input[data-ganhos-input="antes"]');
+      var dInp = tr.querySelector('input[data-ganhos-input="depois"]');
+      var ca = tr.querySelector('.col-antes');
+      var cd = tr.querySelector('.col-depois');
+      var a = aInp ? String(aInp.value || '').trim()
+            : ca ? ca.textContent.trim()
+            : (single && tr.children[1] ? tr.children[1].textContent.trim() : '');
+      var d = single ? ''
+            : dInp ? String(dInp.value || '').trim()
+            : cd ? cd.textContent.trim() : '';
+      model[k] = { label: label, single: !!single, a: a, d: d };
+    });
+    return model;
+  }
+  // Aplica os valores calculados na coluna 'a' ou 'd' SEM tocar na outra:
+  // parte do que esta visivel (readDisplayedRows), seta apenas o slot
+  // pedido, persiste no estado canonico (para a recalc de criterios ficar
+  // consistente) e re-renderiza.
+  function applyColumn(vals, slot) {
+    var byKey = readDisplayedRows();
     (window.coplanGanhosDefaultRows || []).forEach(function (def) {
       var k = normLabel(def.label);
       if (!byKey[k]) {
@@ -794,6 +799,7 @@
     Object.keys(byKey).forEach(function (k) {
       if (!used[k]) rows.push(byKey[k]);
     });
+    var store = window.__coplanGanhosLastFile || {};
     store.parametros = rows;
     window.__coplanGanhosLastFile = store;
     if (typeof window.coplanRenderGanhosTbody === 'function') {
