@@ -9464,6 +9464,20 @@
     }
     return '';
   }
+  function getAnoObra() {
+    var el = document.getElementById('cad-sel-ano');
+    return el ? String(el.value || '').trim() : '';
+  }
+  // Trata divergencia de ano (arquivos do Interplan x ano da obra):
+  // avisa de forma bloqueante e impede a insercao. Retorna true se houve
+  // mismatch (chamador deve abortar).
+  function handleAnoMismatch(r) {
+    if (!r || !r.ano_mismatch) return false;
+    var msg = r.error || 'O ano dos arquivos do Interplan e diferente do ano da obra.';
+    if (typeof window.alert === 'function') window.alert(msg);
+    toast(msg, 'error');
+    return true;
+  }
   function applyMetricasAntes(r) {
     if (!r || !r.ok) return;
     applyColumn({
@@ -9503,12 +9517,14 @@
       return toast('Selecione ao menos 1 alimentador no Cadastro', 'warn');
     }
     var pi = getProjetoInvestimento();
+    var ano = getAnoObra();
     var presets = (window.coplanRequirePresets || {});
     var guard = window.coplanGuard
       || function (act, req, fn) { return Promise.resolve(fn()); };
     guard('Inserir ganhos Antes', presets.export_full, function () {
       toast('Calculando ganhos antes...', 'info');
-      return a.ganhos_compute_antes(alims, pi, '').then(function (r) {
+      return a.ganhos_compute_antes(alims, pi, '', ano).then(function (r) {
+        if (handleAnoMismatch(r)) return;
         if (!r || !r.ok) return toast('Falha: ' + (r && r.error || '?'), 'error');
         applyMetricasAntes(r);
         var ign = (r.alimentadores_ignorados || []).length;
@@ -9528,12 +9544,14 @@
       return toast('Selecione ao menos 1 alimentador no Cadastro', 'warn');
     }
     var pi = getProjetoInvestimento();
+    var ano = getAnoObra();
     var presets = (window.coplanRequirePresets || {});
     var guard = window.coplanGuard
       || function (act, req, fn) { return Promise.resolve(fn()); };
     guard('Inserir ganhos Depois', presets.export_full, function () {
       toast('Calculando ganhos depois...', 'info');
-      return a.ganhos_compute_depois(alims, pi, '').then(function (r) {
+      return a.ganhos_compute_depois(alims, pi, '', ano).then(function (r) {
+        if (handleAnoMismatch(r)) return;
         if (!r || !r.ok) return toast('Falha: ' + (r && r.error || '?'), 'error');
         applyMetricasDepois(r);
         var ign = (r.alimentadores_ignorados || []).length;
