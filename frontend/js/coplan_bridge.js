@@ -171,13 +171,14 @@
       pill.title = friendlyTip(source, info);
       pill.style.cursor = 'pointer';
       // [FIX] Click navega para a fonte de configuracao (db/apoio ->
-      // aba Configuracoes; tecnico_txt -> aba Ganhos). Idempotente.
+      // aba Configuracoes; tecnico_txt -> aba Cadastro, secao Ganhos).
+      // Idempotente.
       if (!pill.__coplanClickBound) {
         pill.__coplanClickBound = true;
         pill.addEventListener('click', function () {
           if (typeof window.coplanSetTab !== 'function') return;
           if (source === 'tecnico_txt') {
-            window.coplanSetTab('ganhos');
+            window.coplanSetTab('cadastro');
           } else {
             window.coplanSetTab('config');
           }
@@ -584,6 +585,13 @@
       // capturando o tab efetivamente ativado.
       b.addEventListener('click', function () {
         fireTabEvent(b.dataset.tab, 'click');
+        // Ganhos foi integrado ao Cadastro (mesma pagina, abaixo). Como
+        // nao ha mais aba/botao proprio de Ganhos, re-disparamos o evento
+        // 'ganhos' ao abrir o Cadastro para inicializar os listeners que
+        // ouvem coplan:tab name==='ganhos'.
+        if (b.dataset.tab === 'cadastro') {
+          fireTabEvent('ganhos', 'merged');
+        }
       });
     });
     // Detecta a aba ativa inicial e dispara evento (passos posteriores
@@ -598,10 +606,11 @@
       if (btn) btn.click();
     };
 
-    // Atalhos Ctrl+1..5 para Visualizar/Cadastro/Ganhos/Resumo/Config.
+    // Atalhos Ctrl+1..4 para Visualizar/Cadastro/Resumo/Config.
+    // (Ganhos foi integrado ao Cadastro; nao tem mais atalho proprio.)
     var shortcuts = {
-      '1': 'visualizar', '2': 'cadastro', '3': 'ganhos',
-      '4': 'resumo',     '5': 'config',
+      '1': 'visualizar', '2': 'cadastro',
+      '3': 'resumo',     '4': 'config',
     };
     document.addEventListener('keydown', function (e) {
       if (!(e.ctrlKey || e.metaKey)) return;
