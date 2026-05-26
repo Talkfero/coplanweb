@@ -641,15 +641,16 @@ def cod_pep(
             f"Valor calculado: {agrup}."
         )
 
-    # SSSS é único por empresa em toda a base (consulta GLOBAL, sem escopo).
-    # Aloca o MENOR sequencial disponível (preenche buracos): coleta os
-    # SSSS em uso e escolhe o primeiro inteiro >= 0 que não está ocupado.
-    # Garante unicidade global e reaproveita faixas livres antes de avançar
-    # (ex.: 125..499 livres com 500..888 ocupados -> usa 125, depois 889).
-    # Sequenciais já existentes nunca mudam (obra despachada não volta atrás).
-    # "Em uso" = SSSS nas obras atuais UNIÃO SSSS já emitidos algum dia
-    # (tabela cod_pep_emitidos): assim um SSSS de obra EXCLUÍDA permanece
-    # reservado e nunca é reaproveitado.
+    # SSSS é único por empresa DENTRO DO ANO DE GERAÇÃO (YY): reinicia a
+    # cada ano, pois o YY já diferencia o COD_PEP (26-...-0001 ≠ 27-...-0001),
+    # então não há sobrescrita e a identidade da obra não se perde.
+    # Aloca o MENOR sequencial disponível no ano (preenche buracos): escolhe
+    # o primeiro inteiro >= 0 não ocupado. Reaproveita faixas livres antes
+    # de avançar (ex.: 125..499 livres com 500..888 ocupados -> usa 125,
+    # depois 889). Sequenciais já existentes nunca mudam.
+    # "Em uso" (no ano YY) = SSSS nas obras atuais UNIÃO SSSS já emitidos
+    # algum dia (tabela cod_pep_emitidos, escopada por empresa+yy): assim um
+    # SSSS de obra EXCLUÍDA do mesmo ano permanece reservado e nunca volta.
     used_seqs: set[int] = set()
     cursor.execute(
         "SELECT cod_pep FROM obras "
@@ -659,11 +660,12 @@ def cod_pep(
     )
     for (cod_existente,) in cursor.fetchall():
         parsed = parse_cod_pep(cod_existente)
-        if parsed and parsed["empresa"] == empresa:
+        if parsed and parsed["empresa"] == empresa and parsed["yy"] == yy:
             used_seqs.add(int(parsed["seq"]))
     try:
         cursor.execute(
-            "SELECT seq FROM cod_pep_emitidos WHERE empresa=?", (empresa,)
+            "SELECT seq FROM cod_pep_emitidos WHERE empresa=? AND yy=?",
+            (empresa, yy),
         )
         for (seq_emit,) in cursor.fetchall():
             used_seqs.add(int(seq_emit))
@@ -674,7 +676,8 @@ def cod_pep(
         seq += 1
     if not (0 <= int(seq) <= 9999):
         raise ValueError(
-            f"Não há sequencial SSSS livre (0000-9999) para empresa {empresa}."
+            f"Não há sequencial SSSS livre (0000-9999) para empresa "
+            f"{empresa} no ano {yy}."
         )
 
     bay_local = obra.get("novo_bay")
@@ -719,8 +722,9 @@ def cod_pep(
     try:
         cursor.execute(
             "INSERT OR IGNORE INTO cod_pep_emitidos "
-            "(empresa, seq, cod_pep, obra_cod, emitido_em) VALUES (?,?,?,?,?)",
-            (empresa, int(seq), resultado, obra_id,
+            "(empresa, yy, seq, cod_pep, obra_cod, emitido_em) "
+            "VALUES (?,?,?,?,?,?)",
+            (empresa, yy, int(seq), resultado, obra_id,
              datetime.datetime.now().strftime('%d/%m/%y %H:%M')),
         )
     except Exception:  # noqa: BLE001
@@ -2334,10 +2338,11 @@ class DatabaseManager:
 
     def _ensure_cod_pep_ledger(self) -> None:
         """Cria a tabela ``cod_pep_emitidos`` (registro PERMANENTE de cada
-        SSSS ja emitido por empresa) e a semeia com os cod_pep atuais das
-        obras. Um SSSS, uma vez emitido, fica reservado para sempre --
-        mesmo que a obra seja excluida -- evitando que um cod_pep liberado
-        por exclusao seja reaproveitado por outra obra."""
+        SSSS ja emitido por empresa+ano) e a semeia com os cod_pep atuais
+        das obras. Um SSSS, uma vez emitido naquele ano (YY), fica reservado
+        -- mesmo que a obra seja excluida -- evitando que um cod_pep liberado
+        por exclusao seja reaproveitado. A numeracao reinicia a cada ano
+        (escopo empresa+yy)."""
         if not self.conn:
             with self._with_connection():
                 return self._ensure_cod_pep_ledger()
@@ -2346,14 +2351,27 @@ class DatabaseManager:
             return
         try:
             with self.write_transaction():
+                # Migracao: schema antigo (sem coluna yy) e' recriado. A
+                # tabela e' recurso novo (nao publicado), entao DROP e' seguro
+                # -- o backfill repovoa a partir das obras.
+                cursor.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name='cod_pep_emitidos'"
+                )
+                if cursor.fetchone():
+                    cursor.execute("PRAGMA table_info(cod_pep_emitidos)")
+                    cols_tab = [c[1] for c in cursor.fetchall()]
+                    if "yy" not in cols_tab:
+                        cursor.execute("DROP TABLE cod_pep_emitidos")
                 cursor.execute(
                     "CREATE TABLE IF NOT EXISTS cod_pep_emitidos ("
                     " empresa TEXT NOT NULL,"
+                    " yy TEXT NOT NULL,"
                     " seq INTEGER NOT NULL,"
                     " cod_pep TEXT,"
                     " obra_cod TEXT,"
                     " emitido_em TEXT,"
-                    " PRIMARY KEY (empresa, seq))"
+                    " PRIMARY KEY (empresa, yy, seq))"
                 )
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("Falha ao criar cod_pep_emitidos: %s", exc)
@@ -2377,15 +2395,15 @@ class DatabaseManager:
             if not emp:
                 continue
             to_insert.append(
-                (emp, int(parsed["seq"]), str(cod_pep_r),
+                (emp, str(parsed["yy"]), int(parsed["seq"]), str(cod_pep_r),
                  str(obra_cod or ""), agora))
         if to_insert:
             try:
                 with self.write_transaction():
                     cursor.executemany(
                         "INSERT OR IGNORE INTO cod_pep_emitidos "
-                        "(empresa, seq, cod_pep, obra_cod, emitido_em) "
-                        "VALUES (?,?,?,?,?)",
+                        "(empresa, yy, seq, cod_pep, obra_cod, emitido_em) "
+                        "VALUES (?,?,?,?,?,?)",
                         to_insert,
                     )
             except Exception as exc:  # noqa: BLE001
