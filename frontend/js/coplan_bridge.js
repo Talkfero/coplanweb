@@ -6131,10 +6131,10 @@
 </script>
 <script>
 (function () {
-  // ---- Fase G: Preview COD da obra (calc_gerar_cod + calc_build_module_key)
-  // Adiciona botao "Preview COD" ao lado do botao "Calcular" no card
-  // Dados Financeiros. Click -> modal mostrando o COD gerado + a chave
-  // de modulo usada (util pra debug quando o calc falha por chave nao
+  // ---- Fase G: Preview da chave de modulo (calc_gerar_cod + calc_build_module_key)
+  // Adiciona botao "Chave de Módulo" ao lado do botao "Calcular" no card
+  // Dados Financeiros. Click -> modal mostrando a chave de calculo + a
+  // chave de modulo usada (util pra debug quando o calc falha por chave nao
   // achada na planilha de apoio).
   function norm(s) {
     return String(s || '').trim().toLowerCase()
@@ -6180,7 +6180,7 @@
     );
     var content = '<div style="display:flex;align-items:center;gap:8px;">'
       + '<i data-lucide="hash"></i>'
-      + '<strong>Preview COD da obra</strong>'
+      + '<strong>Preview da chave de módulo</strong>'
       + '<button id="coplan-preview-cod-close" class="btn"'
       + ' style="margin-left:auto;">Fechar</button></div>';
     if (error) {
@@ -6193,14 +6193,14 @@
     if (cod) {
       content += '<div>'
         + '<div style="font-size:11px;color:var(--text-soft);margin-bottom:4px;">'
-        + 'COD da obra (gerado por CalculationManager.gerar_cod)</div>'
+        + 'Chave de cálculo (CalculationManager.gerar_cod) -- composto PCT|ALIM|TIPO|QTDxCARAC|COORD</div>'
         + '<div style="font-family:monospace;font-size:14px;'
         + 'padding:10px 14px;background:var(--surface-2,#f1f5f9);'
         + 'border-radius:6px;border:1px solid var(--border,#cbd5e1);'
         + 'word-break:break-all;">' + esc(cod) + '</div>'
         + '<button id="coplan-preview-cod-copy-cod" class="btn"'
         + ' style="margin-top:6px;font-size:11px;">'
-        + '<i data-lucide="clipboard"></i> Copiar COD</button></div>';
+        + '<i data-lucide="clipboard"></i> Copiar chave de cálculo</button></div>';
     }
     if (key) {
       content += '<div>'
@@ -6279,8 +6279,8 @@
     var btn = document.createElement('button');
     btn.id = 'coplan-btn-preview-cod';
     btn.className = calcBtn.className || 'btn';
-    btn.title = 'Mostra o COD gerado + a chave de modulo (debug)';
-    btn.innerHTML = '<i data-lucide="hash"></i> Preview COD';
+    btn.title = 'Mostra a chave de calculo + a chave de modulo usadas no lookup de precos (debug)';
+    btn.innerHTML = '<i data-lucide="hash"></i> Chave de Módulo';
     calcBtn.parentNode.insertBefore(btn, calcBtn.nextSibling);
     if (window.lucide) lucide.createIcons();
     btn.addEventListener('click', function (e) {
