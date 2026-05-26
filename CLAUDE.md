@@ -8,7 +8,7 @@
 > **Layout de pastas**: a raiz contém só `main_web.py` (entrypoint) + pastas:
 > `backend/` (`api.py`, `_state.py`, `domains/*.py`), `core/`, `runtime/`,
 > `shared/` (utils puros: `ui_helpers.py`, `texto_utils.py`,
-> `visualizar_pagination.py`), `frontend/` (`index.html`, `js/coplan_bridge.js`,
+> `visualizar_pagination.py`), `frontend/` (`index.html`, `js/bridge/*.js`,
 > `assets/`), `legacy_desktop/` (desktop Qt legado), `docs/`, `scripts/build/`.
 
 ## Arquitetura (web)
@@ -17,8 +17,10 @@
   `main_web.py:main()`, que cria a janela (`webview.create_window`) e inicia com
   `webview.start(debug=debug)`.
 - **Front-end**: `frontend/index.html` (HTML/CSS + JS de UX básico). A camada de
-  UI em JavaScript fica em `frontend/js/coplan_bridge.js` e é injetada em memória
-  por `build_html()` (lê o HTML + o JS do disco e anexa o JS antes de `</body>`;
+  UI em JavaScript fica em `frontend/js/bridge/*.js` (módulos por domínio,
+  cada um com seus blocos `<script>` IIFE) e é injetada em memória por
+  `build_html()` → `_read_bridge_js()` (concatena os `bridge/*.js` em ordem
+  alfabética — o prefixo numérico define a ordem — e anexa antes de `</body>`;
   nunca modifica os arquivos). O JS chama o backend via
   `window.pywebview.api.<metodo>()`.
 - **Backend**: classe `CoplanApi` em `backend/api.py`, **composta por mixins de

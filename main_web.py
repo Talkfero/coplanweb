@@ -9,7 +9,7 @@ Responsabilidades deste arquivo (mantido minimo):
 A logica de backend vive em `backend/` (`CoplanApi` em `backend.api`, composta
 por mixins de dominio em `backend.domains.*`; estado compartilhado em
 `backend._state`). O front-end vive em `frontend/` (`index.html` +
-`js/coplan_bridge.js`). Nenhum arquivo em disco e' modificado em runtime.
+`js/bridge/*.js`). Nenhum arquivo em disco e' modificado em runtime.
 
 Uso:
     pip install -r requirements-web.txt
@@ -34,14 +34,26 @@ from backend.api import CoplanApi  # noqa: E402
 # globais (e FRONTEND_DIR) para a pasta extraida em sys._MEIPASS.
 FRONTEND_DIR = HERE / "frontend"
 HTML_FILE = FRONTEND_DIR / "index.html"
-BRIDGE_JS_FILE = FRONTEND_DIR / "js" / "coplan_bridge.js"
+# O bridge JS foi dividido em modulos por dominio sob frontend/js/bridge/.
+# Sao concatenados em ordem alfabetica (o prefixo numerico define a ordem)
+# sem separador -- a juncao reproduz exatamente o bundle unico anterior.
+BRIDGE_JS_DIR = FRONTEND_DIR / "js" / "bridge"
+
+
+def _read_bridge_js() -> str:
+    """Concatena os modulos JS em frontend/js/bridge/*.js (ordem alfabetica).
+    Deriva o diretorio de ``FRONTEND_DIR`` em tempo de chamada para respeitar
+    o relocate do launcher frozen (sys._MEIPASS)."""
+    bridge_dir = FRONTEND_DIR / "js" / "bridge"
+    files = sorted(bridge_dir.glob("*.js"))
+    return "".join(f.read_text(encoding="utf-8") for f in files)
 
 
 def build_html() -> str:
     """Le o mock do disco e devolve uma copia em memoria com o bridge JS
     anexado antes de ``</body>``. Nunca modifica o arquivo no disco."""
     html = HTML_FILE.read_text(encoding="utf-8")
-    bridge = BRIDGE_JS_FILE.read_text(encoding="utf-8")
+    bridge = _read_bridge_js()
     if "</body>" in html:
         return html.replace("</body>", bridge + "\n</body>", 1)
     return html + bridge

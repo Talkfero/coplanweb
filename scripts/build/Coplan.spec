@@ -13,8 +13,8 @@ ENTRYPOINT = str(SPEC_DIR / "coplan_launcher.py")
 ICON = str(REPO_ROOT / "frontend" / "assets" / "cadastro-de-obras.ico")
 
 datas = [
-    # Bundla a pasta frontend inteira (index.html + js/coplan_bridge.js + assets)
-    # preservando a estrutura; coplan_launcher.py reaponta HTML_FILE/BRIDGE_JS_FILE.
+    # Bundla a pasta frontend inteira (index.html + js/bridge/*.js + assets)
+    # preservando a estrutura; coplan_launcher.py reaponta FRONTEND_DIR/HTML_FILE.
     (str(REPO_ROOT / "frontend"), "frontend"),
 ]
 

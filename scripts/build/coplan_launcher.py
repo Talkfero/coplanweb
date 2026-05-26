@@ -47,14 +47,17 @@ def _unblock_motw(root: Path) -> None:
 
 
 def _patch_paths() -> None:
-    """Point `HTML_FILE`/`BRIDGE_JS_FILE` at the bundled `frontend/` inside `_MEIPASS`."""
+    """Point `FRONTEND_DIR`/`HTML_FILE` at the bundled `frontend/` inside `_MEIPASS`.
+
+    O bridge JS e' lido de `FRONTEND_DIR / js / bridge` em tempo de chamada
+    por `main_web._read_bridge_js`, entao basta reapontar `FRONTEND_DIR`.
+    """
     meipass = getattr(sys, "_MEIPASS", None)
     if not meipass:
         return
 
     frontend_dir = Path(meipass) / "frontend"
     html_path = frontend_dir / "index.html"
-    bridge_path = frontend_dir / "js" / "coplan_bridge.js"
 
     import main_web  # noqa: PLC0415 -- imported after sys.path is set by PyInstaller
 
@@ -62,8 +65,6 @@ def _patch_paths() -> None:
         main_web.FRONTEND_DIR = frontend_dir
     if html_path.exists():
         main_web.HTML_FILE = html_path
-    if bridge_path.exists():
-        main_web.BRIDGE_JS_FILE = bridge_path
 
 
 def main() -> None:
