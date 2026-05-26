@@ -1279,6 +1279,63 @@
               </div>
             </div>
 
+            <!-- Critérios de Planejamento (movido da seção Ganhos): avalia
+                 os ganhos calculados contra os criterios vigentes. -->
+            <div class="card mt-3" id="ganhos-card-criterios">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="check-circle"></i> Critérios de Planejamento</div>
+              </div>
+              <div class="card-body">
+                <!-- G005: 4 checks declarativos populados por get_criterios().regras[] via JS. -->
+                <div id="ganhos-criterios-list" style="display:flex;flex-direction:column;gap:8px;">
+                  <div class="row" data-criterio="tensao_min" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                    <span>Tensão mínima</span>
+                    <span class="badge">—</span>
+                  </div>
+                  <div class="row" data-criterio="tensao_max" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                    <span>Tensão máxima</span>
+                    <span class="badge">—</span>
+                  </div>
+                  <div class="row" data-criterio="carregamento" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                    <span>Carregamento</span>
+                    <span class="badge">—</span>
+                  </div>
+                  <div class="row" data-criterio="clientes" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                    <span>Clientes</span>
+                    <span class="badge">—</span>
+                  </div>
+                </div>
+                <!-- G005: labels Planejamento (atendeu critérios) e Postergação (suporta degradação). -->
+                <div id="ganhos-label-planejamento" data-state="pending" class="mt-3" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
+                  <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
+                  Aguardando dados para avaliar Planejamento
+                </div>
+                <div id="ganhos-label-posterga" data-state="pending" class="mt-2" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
+                  <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
+                  Aguardando dados para avaliar Postergação
+                </div>
+              </div>
+            </div>
+
+            <!-- Arquivos de ganhos (Interplan): caminho da pasta com os
+                 arquivos tecnicos gerados pelo Interplan, de onde os ganhos
+                 da obra sao extraidos. -->
+            <div class="card mt-3" id="ganhos-card-pasta">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="folder-open"></i> Arquivos de ganhos (Interplan)</div>
+                <span class="grow"></span>
+                <span class="badge" id="ganhos-badge-arquivos"><span class="dot"></span>—</span>
+              </div>
+              <div class="card-body" style="padding: 12px 16px;">
+                <div class="helper" style="margin-bottom:8px;line-height:1.4;">Caminho da pasta com os arquivos gerados pelo Interplan (FlowMT.TXT, Topologia.TXT, Confiabilidade.TXT) de onde os ganhos da obra são extraídos.</div>
+                <div class="input-row" style="flex-wrap:wrap;gap:6px;">
+                  <input class="input mono" id="ganhos-input-pasta" style="flex:1 1 100%;" placeholder="Selecione a pasta dos arquivos do Interplan" />
+                  <button class="btn" id="ganhos-btn-selecionar" type="button" title="Selecionar pasta dos arquivos tecnicos (FlowMT.TXT, Topologia.TXT, Confiabilidade.TXT)"><i data-lucide="folder-search"></i> Selecionar</button>
+                  <button class="btn" id="ganhos-btn-recarregar" type="button" title="Recontar arquivos da pasta"><i data-lucide="refresh-ccw"></i> Recarregar</button>
+                </div>
+              </div>
+            </div>
+
             <!-- Status da Nota: informativo (sem bloqueio).
                  Visível só quando há despacho_status preenchido na obra
                  carregada. Avisa o operador que está editando obra
@@ -1311,23 +1368,6 @@
 
         <!-- ===== GANHOS (integrado ao Cadastro) ===== -->
         <section id="tab-ganhos" class="active" style="margin-top:14px;">
-        <div class="row mt-2" style="margin-bottom:14px;">
-          <div class="card grow" id="ganhos-card-pasta">
-            <div class="card-header">
-              <div class="card-title"><i data-lucide="folder-open"></i> Pasta de arquivos do alimentador</div>
-              <span class="grow"></span>
-              <span class="badge" id="ganhos-badge-arquivos"><span class="dot"></span>—</span>
-            </div>
-            <div class="card-body" style="padding: 12px 16px;">
-              <div class="input-row">
-                <input class="input mono" id="ganhos-input-pasta" placeholder="Selecione a pasta dos arquivos técnicos (FlowMT.TXT, Topologia.TXT, ...)" />
-                <button class="btn" id="ganhos-btn-selecionar" type="button" title="Selecionar pasta dos arquivos tecnicos (FlowMT.TXT, Topologia.TXT, Confiabilidade.TXT)"><i data-lucide="folder-search"></i> Selecionar</button>
-                <button class="btn" id="ganhos-btn-recarregar" type="button" title="Recontar arquivos da pasta"><i data-lucide="refresh-ccw"></i> Recarregar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div class="card" id="ganhos-card-parametros">
           <div class="card-header">
             <div class="card-title" id="ganhos-card-parametros-title"><i data-lucide="trending-up"></i> Parâmetros de Ganhos — <span id="ganhos-alim-atual">—</span></div>
@@ -1374,42 +1414,6 @@
                 </div>
               </div>
               <button class="btn mt-2" id="btn-ganhos-atual" type="button" title="Calcula tensoes min/max e carregamento atuais (sem contexto de obra). Usa apenas FlowMT.TXT + Topologia.TXT"><i data-lucide="arrow-up-from-line"></i> Preencher parâmetros atuais</button>
-            </div>
-          </div>
-
-          <div class="card" id="ganhos-card-criterios" style="width: 380px;">
-            <div class="card-header">
-              <div class="card-title"><i data-lucide="check-circle"></i> Critérios de Planejamento</div>
-            </div>
-            <div class="card-body">
-              <!-- G005: 4 checks declarativos populados por get_criterios().regras[] via JS. -->
-              <div id="ganhos-criterios-list" style="display:flex;flex-direction:column;gap:8px;">
-                <div class="row" data-criterio="tensao_min" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
-                  <span>Tensão mínima</span>
-                  <span class="badge">—</span>
-                </div>
-                <div class="row" data-criterio="tensao_max" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
-                  <span>Tensão máxima</span>
-                  <span class="badge">—</span>
-                </div>
-                <div class="row" data-criterio="carregamento" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
-                  <span>Carregamento</span>
-                  <span class="badge">—</span>
-                </div>
-                <div class="row" data-criterio="clientes" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
-                  <span>Clientes</span>
-                  <span class="badge">—</span>
-                </div>
-              </div>
-              <!-- G005: labels Planejamento (atendeu critérios) e Postergação (suporta degradação). -->
-              <div id="ganhos-label-planejamento" data-state="pending" class="mt-3" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
-                <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
-                Aguardando dados para avaliar Planejamento
-              </div>
-              <div id="ganhos-label-posterga" data-state="pending" class="mt-2" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
-                <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
-                Aguardando dados para avaliar Postergação
-              </div>
             </div>
           </div>
         </div>

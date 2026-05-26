@@ -8926,16 +8926,7 @@
       .normalize('NFD').replace(/[̀-ͯ]/g, '');
   }
   function getCard() {
-    var scope = document.getElementById('tab-ganhos');
-    if (!scope) return null;
-    var cards = scope.querySelectorAll('.card');
-    for (var i = 0; i < cards.length; i++) {
-      var t = cards[i].querySelector('.card-title');
-      if (t && norm(t.textContent).indexOf('pasta de arquivos') === 0) {
-        return cards[i];
-      }
-    }
-    return null;
+    return document.getElementById('ganhos-card-pasta');
   }
   function getInputs(card) {
     if (!card) return {};
@@ -9111,17 +9102,7 @@
     return bytes + ' B';
   }
   function findGanhosFolderCard() {
-    var scope = document.getElementById('tab-ganhos');
-    if (!scope) return null;
-    var titles = scope.querySelectorAll('.card .card-title');
-    for (var i = 0; i < titles.length; i++) {
-      var t = titles[i].textContent.toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '');
-      if (t.indexOf('pasta de arquivos') === 0) {
-        return titles[i].closest('.card');
-      }
-    }
-    return null;
+    return document.getElementById('ganhos-card-pasta');
   }
   function ensureFileListBox(card) {
     if (!card) return null;
@@ -9799,15 +9780,7 @@
 
   // Card lateral "Criterios de Planejamento"
   function findRightCard() {
-    var scope = document.getElementById('tab-ganhos');
-    if (!scope) return null;
-    var titles = scope.querySelectorAll('.card .card-title');
-    for (var i = 0; i < titles.length; i++) {
-      if (norm(titles[i].textContent).indexOf('criterios de planejamento') === 0) {
-        return titles[i].closest('.card');
-      }
-    }
-    return null;
+    return document.getElementById('ganhos-card-criterios');
   }
   function renderRightCard() {
     var card = findRightCard();
