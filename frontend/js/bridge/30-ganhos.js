@@ -961,12 +961,14 @@
     if (!alims.length) {
       return toast('Selecione ao menos 1 alimentador no Cadastro', 'warn');
     }
+    var ano = getAnoObra();
     var presets = (window.coplanRequirePresets || {});
     var guard = window.coplanGuard
       || function (act, req, fn) { return Promise.resolve(fn()); };
     guard('Preencher parametros atuais', presets.export_full, function () {
       toast('Calculando atuais...', 'info');
-      return a.ganhos_compute_atual(alims, '').then(function (r) {
+      return a.ganhos_compute_atual(alims, '', ano).then(function (r) {
+        if (handleAnoMismatch(r)) return;
         if (!r || !r.ok) return toast('Falha: ' + (r && r.error || '?'), 'error');
         var iTr = document.getElementById('ganhos-atual-tensao-reg');
         var iCr = document.getElementById('ganhos-atual-carreg');

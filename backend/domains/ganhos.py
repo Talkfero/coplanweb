@@ -658,6 +658,28 @@ class GanhosMixin:
             )
         return ano_arq, ""
 
+    def _ganhos_validar_ano_registrado(
+        self, data_flow: Any, ano_obra: Any,
+    ) -> tuple[str, str]:
+        """Para Ganhos Atuais (registrados): o ano dos arquivos do Interplan
+        deve ser ANTERIOR (menor) ao ano da obra. Retorna (ano_arquivo,
+        msg_erro). So bloqueia quando ambos presentes e ano_arq >= ano_obra."""
+        ano_obra_s = str(ano_obra or "").strip()
+        ano_arq = self._ganhos_extrair_ano(data_flow)
+        if not ano_obra_s or not ano_arq:
+            return ano_arq, ""
+        try:
+            if int(ano_arq) < int(ano_obra_s):
+                return ano_arq, ""
+        except ValueError:
+            return ano_arq, ""
+        return ano_arq, (
+            f"Para Ganhos Atuais (registrados), o ano dos arquivos do Interplan "
+            f"(Ano: {ano_arq}) deve ser ANTERIOR ao ano da obra ({ano_obra_s}). "
+            f"Selecione arquivos de um ano anterior a {ano_obra_s} "
+            f"(ex.: {int(ano_obra_s) - 1 if ano_obra_s.isdigit() else ''})."
+        )
+
     @staticmethod
     def _ganhos_filter_alims(
         alimentadores: list[str], buffers: list[Any],
@@ -970,6 +992,7 @@ class GanhosMixin:
         self,
         alimentadores: Any = None,
         pasta: Any = "",
+        ano_obra: Any = "",
     ) -> dict[str, Any]:
         """Calcula 4 metricas + ganhos_totais_atual.
         Equivalente a preencher_parametros_atuais do desktop.
@@ -990,6 +1013,12 @@ class GanhosMixin:
             return {"ok": False, "error": err}
         data_flow = dados.get("FlowMT.TXT") or []
         data_topo = dados.get("Topologia.TXT") or []
+        # Registrado deve vir de um ano ANTERIOR ao ano da obra.
+        ano_arq, ano_err = self._ganhos_validar_ano_registrado(data_flow, ano_obra)
+        if ano_err:
+            return {"ok": False, "error": ano_err, "ano_mismatch": True,
+                    "ano_arquivo": ano_arq,
+                    "ano_obra": str(ano_obra or "").strip()}
         try:
             tensao_min, _ = cm.calcular_tensoes(data_flow, alims)
             tensao_min_linha = cm.calcular_tensao_linha_minima(data_flow, alims)
