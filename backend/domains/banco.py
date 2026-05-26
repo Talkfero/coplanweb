@@ -1357,6 +1357,70 @@ class BancoMixin:
             return out
         return {"ok": True, "zerados": zerados, "error": ""}
 
+    # --- Gerenciamento do registro de COD_PEP emitidos ---------------
+
+    def cod_pep_ledger_list(
+        self, termo: Any = "", empresa: Any = "", yy: Any = "",
+        limit: Any = 1000, offset: Any = 0,
+    ) -> dict[str, Any]:
+        """Lista o registro de PEPs emitidos (cod_pep_emitidos) com filtros
+        opcionais. Retorna {ok, rows, total, error}."""
+        db, err = self._ensure_db_connected()
+        if err or db is None:
+            return {"ok": False, "rows": [], "total": 0,
+                    "error": err or "db indisponivel"}
+        try:
+            rows, total = db.cod_pep_ledger_list(
+                termo=str(termo or ""), empresa=str(empresa or ""),
+                yy=str(yy or ""), limit=int(limit or 1000),
+                offset=int(offset or 0),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "rows": [], "total": 0,
+                    "error": f"ledger_list: {exc}"}
+        return {"ok": True, "rows": rows, "total": int(total or 0),
+                "error": ""}
+
+    def cod_pep_ledger_add(self, cod_pep: Any = "", obra_cod: Any = "") -> dict[str, Any]:
+        """Reserva manualmente um COD_PEP no registro. Retorna {ok, added}."""
+        cod = str(cod_pep or "").strip()
+        if not cod:
+            return {"ok": False, "added": 0, "error": "cod_pep vazio"}
+        db, err = self._ensure_db_connected()
+        if err or db is None:
+            return {"ok": False, "added": 0, "error": err or "db indisponivel"}
+        try:
+            added = int(db.cod_pep_ledger_add(cod, str(obra_cod or "")) or 0)
+        except ValueError as exc:
+            return {"ok": False, "added": 0, "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            friendly = self._friendly_busy_error(exc)
+            return {"ok": False, "added": 0,
+                    "error": friendly or f"ledger_add: {exc}"}
+        return {"ok": True, "added": added, "error": "",
+                "ja_existia": added == 0}
+
+    def cod_pep_ledger_remove(
+        self, empresa: Any = "", yy: Any = "", seq: Any = "",
+    ) -> dict[str, Any]:
+        """Remove uma reserva do registro (libera o SSSS do ano).
+        Retorna {ok, removed}."""
+        try:
+            seq_i = int(seq)
+        except Exception:  # noqa: BLE001
+            return {"ok": False, "removed": 0, "error": "seq invalido"}
+        db, err = self._ensure_db_connected()
+        if err or db is None:
+            return {"ok": False, "removed": 0, "error": err or "db indisponivel"}
+        try:
+            removed = int(db.cod_pep_ledger_remove(
+                str(empresa or ""), str(yy or ""), seq_i) or 0)
+        except Exception as exc:  # noqa: BLE001
+            friendly = self._friendly_busy_error(exc)
+            return {"ok": False, "removed": 0,
+                    "error": friendly or f"ledger_remove: {exc}"}
+        return {"ok": True, "removed": removed, "error": ""}
+
     # --- Fase 6: CSV import/export -----------------------------------
 
     def csv_export(self, destino: Any = "") -> dict[str, Any]:

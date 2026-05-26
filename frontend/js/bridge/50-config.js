@@ -231,6 +231,127 @@
       window.coplanToast(msg, level || 'info');
     }
   }
+
+  // Modal de gerencia do registro de COD_PEP emitidos (cod_pep_emitidos):
+  // listar (com filtro), reservar manualmente e remover. Construido em
+  // memoria para nao depender de markup no index.html.
+  function openCodPepLedgerModal() {
+    var api = window.pywebview && window.pywebview.api;
+    if (!(api && api.cod_pep_ledger_list)) {
+      return toast('API indisponivel', 'error');
+    }
+    var backdrop = document.createElement('div');
+    backdrop.style.cssText =
+      'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100000;'
+      + 'display:flex;align-items:center;justify-content:center;padding:24px;';
+    backdrop.addEventListener('click', function (e) {
+      if (e.target === backdrop) document.body.removeChild(backdrop);
+    });
+    var box = document.createElement('div');
+    box.style.cssText =
+      'background:var(--surface,#fff);border-radius:8px;padding:18px;'
+      + 'max-width:900px;width:100%;max-height:85vh;display:flex;'
+      + 'flex-direction:column;gap:12px;box-shadow:0 10px 40px rgba(0,0,0,.3);';
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;">'
+      + '<i data-lucide="list"></i><strong>COD_PEP emitidos (registro)</strong>'
+      + '<span id="cpl-count" style="color:var(--text-soft);font-size:12px;"></span>'
+      + '<button id="cpl-close" class="btn" style="margin-left:auto;">Fechar</button>'
+      + '</div>'
+      + '<div class="row" style="display:flex;gap:6px;flex-wrap:wrap;">'
+      + '<input id="cpl-filtro" class="input" placeholder="Filtrar por COD_PEP ou obra..." style="flex:1;min-width:200px;"/>'
+      + '<input id="cpl-yy" class="input mono" placeholder="Ano (YY)" style="width:90px;"/>'
+      + '</div>'
+      + '<div style="border:1px solid var(--border);border-radius:6px;overflow:auto;max-height:48vh;">'
+      + '<table class="data-table" style="width:100%;font-size:12px;">'
+      + '<thead><tr>'
+      + '<th style="text-align:left;padding:6px 10px;">COD_PEP</th>'
+      + '<th style="text-align:left;padding:6px 10px;">Empresa</th>'
+      + '<th style="text-align:right;padding:6px 10px;">Ano</th>'
+      + '<th style="text-align:right;padding:6px 10px;">SSSS</th>'
+      + '<th style="text-align:left;padding:6px 10px;">Obra</th>'
+      + '<th style="text-align:left;padding:6px 10px;">Emitido</th>'
+      + '<th style="padding:6px 10px;"></th>'
+      + '</tr></thead><tbody id="cpl-tbody"></tbody>'
+      + '</table></div>'
+      + '<div class="row" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border);padding-top:10px;">'
+      + '<input id="cpl-novo" class="input mono" placeholder="Reservar COD_PEP (ex.: MA-26-001-047-0125-U)" style="flex:1;min-width:240px;"/>'
+      + '<button id="cpl-add" class="btn primary"><i data-lucide="plus"></i> Reservar</button>'
+      + '</div>';
+    backdrop.appendChild(box);
+    document.body.appendChild(backdrop);
+    if (window.lucide) lucide.createIcons();
+
+    var byId = function (i) { return document.getElementById(i); };
+    byId('cpl-close').onclick = function () { document.body.removeChild(backdrop); };
+
+    function render(rows, total) {
+      var tb = byId('cpl-tbody');
+      var cnt = byId('cpl-count');
+      if (cnt) cnt.textContent = '· ' + total + ' registro(s)'
+        + (rows.length < total ? ' (mostrando ' + rows.length + ')' : '');
+      if (!tb) return;
+      if (!rows.length) {
+        tb.innerHTML = '<tr><td colspan="7" style="padding:16px;text-align:center;color:var(--text-soft);">Nenhum COD_PEP no registro.</td></tr>';
+        return;
+      }
+      tb.innerHTML = rows.map(function (r) {
+        return '<tr>'
+          + '<td class="mono" style="padding:6px 10px;">' + esc(r.cod_pep) + '</td>'
+          + '<td style="padding:6px 10px;">' + esc(r.empresa) + '</td>'
+          + '<td class="mono" style="padding:6px 10px;text-align:right;">' + esc(r.yy) + '</td>'
+          + '<td class="mono" style="padding:6px 10px;text-align:right;">' + esc(String(r.seq)) + '</td>'
+          + '<td class="mono" style="padding:6px 10px;">' + esc(r.obra_cod) + '</td>'
+          + '<td style="padding:6px 10px;color:var(--text-soft);">' + esc(r.emitido_em) + '</td>'
+          + '<td style="padding:6px 10px;text-align:right;">'
+          + '<button class="btn sm danger" data-emp="' + esc(r.empresa) + '" data-yy="' + esc(r.yy) + '" data-seq="' + esc(String(r.seq)) + '" title="Remover (libera o SSSS deste ano)"><i data-lucide="trash-2"></i></button>'
+          + '</td></tr>';
+      }).join('');
+      if (window.lucide) lucide.createIcons();
+      tb.querySelectorAll('button[data-seq]').forEach(function (b) {
+        b.onclick = function () {
+          if (!window.confirm('Remover ' + b.getAttribute('data-emp') + '-'
+              + b.getAttribute('data-yy') + '-' + b.getAttribute('data-seq')
+              + ' do registro?\nO SSSS volta a ficar disponivel naquele ano.')) return;
+          api.cod_pep_ledger_remove(
+            b.getAttribute('data-emp'), b.getAttribute('data-yy'),
+            b.getAttribute('data-seq')).then(function (r) {
+              if (r && r.ok) { toast(r.removed + ' removido(s)', 'info'); reload(); }
+              else toast('Falha: ' + (r && r.error || '?'), 'error');
+            }).catch(function (e) { toast('Falha: ' + (e && e.message || e), 'error'); });
+        };
+      });
+    }
+
+    function reload() {
+      api.cod_pep_ledger_list(
+        byId('cpl-filtro').value || '', '', byId('cpl-yy').value || '', 1000, 0
+      ).then(function (r) {
+        if (r && r.ok) render(r.rows || [], r.total || 0);
+        else toast('Falha: ' + (r && r.error || '?'), 'error');
+      }).catch(function (e) { toast('Falha: ' + (e && e.message || e), 'error'); });
+    }
+
+    var t = null;
+    function debounced() { clearTimeout(t); t = setTimeout(reload, 250); }
+    byId('cpl-filtro').oninput = debounced;
+    byId('cpl-yy').oninput = debounced;
+    byId('cpl-add').onclick = function () {
+      var v = (byId('cpl-novo').value || '').trim();
+      if (!v) return toast('Informe um COD_PEP', 'warn');
+      api.cod_pep_ledger_add(v, '').then(function (r) {
+        if (r && r.ok) {
+          toast(r.ja_existia ? 'Ja estava reservado' : 'Reservado', 'info');
+          byId('cpl-novo').value = '';
+          reload();
+        } else {
+          toast('Falha: ' + (r && r.error || '?'), 'error');
+        }
+      }).catch(function (e) { toast('Falha: ' + (e && e.message || e), 'error'); });
+    };
+    reload();
+  }
+
   function ensureAdminCard() {
     var scope = document.getElementById('tab-config');
     if (!scope) return null;
@@ -293,6 +414,8 @@
     +       '<i data-lucide="play-circle"></i> Preencher pendentes</button>'
     +     '<button id="coplan-btn-cod-pep-zerar" class="btn danger">'
     +       '<i data-lucide="trash-2"></i> Zerar base</button>'
+    +     '<button id="coplan-btn-cod-pep-ledger" class="btn">'
+    +       '<i data-lucide="list"></i> Gerenciar emitidos</button>'
     +   '</div>'
     + '</div>'
 
@@ -469,6 +592,9 @@
             { error: String((err && err.message) || err || '?') });
         }
       });
+    });
+    bind('coplan-btn-cod-pep-ledger', function () {
+      openCodPepLedgerModal();
     });
     bind('coplan-btn-cod-pep-zerar', function () {
       if (!(api && api.cod_pep_zerar)) return toast('API indisponivel', 'error');

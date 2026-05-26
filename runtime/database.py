@@ -2409,6 +2409,105 @@ class DatabaseManager:
             except Exception as exc:  # noqa: BLE001
                 LOGGER.warning("Falha no backfill de cod_pep_emitidos: %s", exc)
 
+    def cod_pep_ledger_list(
+        self, termo: str = "", empresa: str = "", yy: str = "",
+        limit: int = 1000, offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Lista o registro de PEPs emitidos com filtros opcionais
+        (termo casa cod_pep/obra_cod; empresa e yy exatos). Retorna
+        (linhas, total) -- total ignora limit/offset (para paginacao)."""
+        self._ensure_cod_pep_ledger()
+        with self._with_connection():
+            cursor = self._get_cursor()
+            if not cursor:
+                return [], 0
+            where: list[str] = []
+            params: list[Any] = []
+            emp = normalize_text(empresa)
+            if emp:
+                where.append("empresa=?")
+                params.append(emp)
+            yy_s = str(yy or "").strip()
+            if yy_s:
+                where.append("yy=?")
+                params.append(yy_s)
+            termo_s = str(termo or "").strip()
+            if termo_s:
+                where.append("(UPPER(cod_pep) LIKE ? OR UPPER(obra_cod) LIKE ?)")
+                like = "%" + termo_s.upper() + "%"
+                params.extend([like, like])
+            wsql = (" WHERE " + " AND ".join(where)) if where else ""
+            try:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM cod_pep_emitidos" + wsql, params)
+                total = int((cursor.fetchone() or [0])[0] or 0)
+                cursor.execute(
+                    "SELECT empresa, yy, seq, cod_pep, obra_cod, emitido_em "
+                    "FROM cod_pep_emitidos" + wsql
+                    + " ORDER BY empresa, yy, seq LIMIT ? OFFSET ?",
+                    params + [int(limit), int(offset)],
+                )
+                rows = [
+                    {"empresa": r[0], "yy": r[1], "seq": int(r[2] or 0),
+                     "cod_pep": r[3] or "", "obra_cod": r[4] or "",
+                     "emitido_em": r[5] or ""}
+                    for r in cursor.fetchall()
+                ]
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("cod_pep_ledger_list: %s", exc)
+                return [], 0
+        return rows, total
+
+    @run_write_in_qthread_if_ui_thread
+    @with_lock_action("Inserir COD_PEP no registro")
+    @retry_on_busy()
+    def cod_pep_ledger_add(self, cod_pep: str, obra_cod: str = "") -> int:
+        """Reserva manualmente um COD_PEP no registro. Faz parse para
+        extrair empresa/yy/seq. Retorna 1 se inseriu, 0 se ja existia."""
+        parsed = parse_cod_pep(cod_pep)
+        if not parsed:
+            raise ValueError(f"COD_PEP invalido: '{cod_pep}'")
+        self._ensure_cod_pep_ledger()
+        inserido = 0
+        with self._with_connection():
+            cursor = self._get_cursor()
+            if not cursor:
+                return 0
+            agora = datetime.datetime.now().strftime('%d/%m/%y %H:%M')
+            with self.write_transaction():
+                cursor.execute(
+                    "INSERT OR IGNORE INTO cod_pep_emitidos "
+                    "(empresa, yy, seq, cod_pep, obra_cod, emitido_em) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (parsed["empresa"], parsed["yy"], int(parsed["seq"]),
+                     str(cod_pep).strip().upper(), str(obra_cod or ""), agora),
+                )
+                inserido = int(cursor.rowcount or 0)
+        return inserido
+
+    @run_write_in_qthread_if_ui_thread
+    @with_lock_action("Remover COD_PEP do registro")
+    @retry_on_busy()
+    def cod_pep_ledger_remove(
+        self, empresa: str, yy: str, seq: int,
+    ) -> int:
+        """Remove uma reserva do registro (libera o SSSS daquele ano para
+        ser reaproveitado). Retorna a contagem removida."""
+        self._ensure_cod_pep_ledger()
+        removido = 0
+        with self._with_connection():
+            cursor = self._get_cursor()
+            if not cursor:
+                return 0
+            with self.write_transaction():
+                cursor.execute(
+                    "DELETE FROM cod_pep_emitidos "
+                    "WHERE empresa=? AND yy=? AND seq=?",
+                    (normalize_text(empresa), str(yy or "").strip(), int(seq)),
+                )
+                removido = int(cursor.rowcount or 0)
+        return removido
+
     def count_tecnico_dirty(self, pacotes=None) -> int:
         """Conta obras com dados técnicos desatualizados."""
         if pacotes is None:
