@@ -617,6 +617,17 @@ class BancoMixin:
         except Exception:  # noqa: BLE001
             pass  # noqa: BLE001
 
+        # ----- Registra no ledger os cod_pep que vieram na planilha -----
+        # Importacao prioriza o cod_pep do Excel (preservado). Para que
+        # esses tambem fiquem reservados (e nao sejam reaproveitados se a
+        # obra for excluida depois), reaplica o backfill de cod_pep_emitidos.
+        try:
+            ensure_ledger = getattr(db, "_ensure_cod_pep_ledger", None)
+            if callable(ensure_ledger):
+                ensure_ledger()
+        except Exception:  # noqa: BLE001
+            pass
+
         # ----- M20 grava arquivo de log .txt -----
         log_path = ""
         if error_log:
@@ -1396,6 +1407,13 @@ class BancoMixin:
         if not ok:
             return {"ok": False, "ignorados": int(ignorados or 0),
                     "error": "importacao falhou"}
+        # Reserva no ledger os cod_pep vindos do CSV (idempotente).
+        try:
+            ensure_ledger = getattr(db, "_ensure_cod_pep_ledger", None)
+            if callable(ensure_ledger):
+                ensure_ledger()
+        except Exception:  # noqa: BLE001
+            pass
         return {"ok": True, "ignorados": int(ignorados or 0), "error": ""}
 
     def csv_pick_and_import(self) -> dict[str, Any]:
