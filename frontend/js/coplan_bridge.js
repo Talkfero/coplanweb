@@ -9378,11 +9378,56 @@
     if (isNaN(v)) return String(n);
     return v.toFixed(d == null ? 4 : d);
   }
-  function setRowVal(key, slot, value) {
-    // slot: 'antes' | 'depois'
-    var sel = 'tr[data-row="' + key + '"] input[data-ganhos-input="' + slot + '"]';
-    var inp = document.querySelector(sel);
-    if (inp) inp.value = (value == null ? '' : String(value));
+  function normLabel(s) {
+    return String(s || '').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+  // Le o estado atual da tabela #ganhos-tbody (celulas de texto) num mapa
+  // por label normalizado, para preservar a coluna que nao esta sendo
+  // recalculada (ex.: ao clicar "Depois" nao perde os valores "Antes").
+  function readTableModel() {
+    var model = {};
+    var tbody = document.getElementById('ganhos-tbody');
+    if (!tbody) return model;
+    tbody.querySelectorAll('tr').forEach(function (tr) {
+      if (!tr.children.length) return;
+      var label = (tr.children[0].textContent || '').trim();
+      if (!label) return;
+      var ca = tr.querySelector('.col-antes');
+      var cd = tr.querySelector('.col-depois');
+      model[normLabel(label)] = {
+        label: label,
+        single: !ca && !cd,
+        a: ca ? ca.textContent.trim() : '',
+        d: cd ? cd.textContent.trim() : ''
+      };
+    });
+    return model;
+  }
+  // Aplica os valores calculados (mapa label->valor) na coluna 'a' ou 'd'
+  // e re-renderiza a tabela preservando a outra coluna.
+  function applyColumn(vals, slot) {
+    var model = readTableModel();
+    Object.keys(vals).forEach(function (label) {
+      var k = normLabel(label);
+      if (!model[k]) model[k] = { label: label, single: false, a: '', d: '' };
+      var v = vals[label];
+      model[k][slot] = (v == null ? '' : String(v));
+    });
+    var defaults = window.coplanGanhosDefaultLabels || [];
+    var rows = [];
+    var used = {};
+    defaults.forEach(function (label) {
+      var k = normLabel(label);
+      used[k] = 1;
+      rows.push(model[k] || { label: label, single: false, a: '', d: '' });
+    });
+    Object.keys(model).forEach(function (k) {
+      if (!used[k]) rows.push(model[k]);
+    });
+    if (typeof window.coplanRenderGanhosTbody === 'function') {
+      window.coplanRenderGanhosTbody(rows);
+    }
   }
   function getCadastroFieldByLabel(prefix) {
     // Replica o lookup de cadastro_mixin: <div class="field"> com <label>
@@ -9430,29 +9475,33 @@
   }
   function applyMetricasAntes(r) {
     if (!r || !r.ok) return;
-    setRowVal('contas',           'antes', r.contas_antes);
-    setRowVal('carregamento',     'antes', fmt(r.carregamento, 2));
-    setRowVal('perdas',           'antes', fmt(r.perdas, 2));
-    setRowVal('tensao_media',     'antes', fmt(r.tensao_media, 4));
-    setRowVal('tensao_min',       'antes', fmt(r.tensao_min, 4));
-    setRowVal('tensao_min_linha', 'antes', fmt(r.tensao_min_linha, 4));
-    setRowVal('tensao_max',       'antes', fmt(r.tensao_max, 4));
-    setRowVal('chi',              'antes', fmt(r.chi, 4));
-    setRowVal('ci',               'antes', fmt(r.ci, 4));
-    setRowVal('ganhos_totais',    'antes', r.ganhos_totais || '');
+    applyColumn({
+      'Contas Contratos':       r.contas_antes,
+      'Carregamento (%)':       fmt(r.carregamento, 2),
+      'Perdas kW':              fmt(r.perdas, 2),
+      'Tensao Media (pu)':      fmt(r.tensao_media, 4),
+      'Tensao Min. (pu)':       fmt(r.tensao_min, 4),
+      'Tensao Linha Min. (pu)': fmt(r.tensao_min_linha, 4),
+      'CHI':                    fmt(r.chi, 4),
+      'CI':                     fmt(r.ci, 4),
+      'Tensao Maxima':          fmt(r.tensao_max, 4),
+      'Ganhos Totais':          r.ganhos_totais || ''
+    }, 'a');
   }
   function applyMetricasDepois(r) {
     if (!r || !r.ok) return;
-    setRowVal('contas',           'depois', r.contas_depois);
-    setRowVal('carregamento',     'depois', fmt(r.carregamento, 2));
-    setRowVal('perdas',           'depois', fmt(r.perdas, 2));
-    setRowVal('tensao_media',     'depois', fmt(r.tensao_media, 4));
-    setRowVal('tensao_min',       'depois', fmt(r.tensao_min, 4));
-    setRowVal('tensao_min_linha', 'depois', fmt(r.tensao_min_linha, 4));
-    setRowVal('tensao_max',       'depois', fmt(r.tensao_max, 4));
-    setRowVal('chi',              'depois', fmt(r.chi, 4));
-    setRowVal('ci',               'depois', fmt(r.ci, 4));
-    setRowVal('ganhos_totais',    'depois', r.ganhos_totais || '');
+    applyColumn({
+      'Contas Contratos':       r.contas_depois,
+      'Carregamento (%)':       fmt(r.carregamento, 2),
+      'Perdas kW':              fmt(r.perdas, 2),
+      'Tensao Media (pu)':      fmt(r.tensao_media, 4),
+      'Tensao Min. (pu)':       fmt(r.tensao_min, 4),
+      'Tensao Linha Min. (pu)': fmt(r.tensao_min_linha, 4),
+      'CHI':                    fmt(r.chi, 4),
+      'CI':                     fmt(r.ci, 4),
+      'Tensao Maxima':          fmt(r.tensao_max, 4),
+      'Ganhos Totais':          r.ganhos_totais || ''
+    }, 'd');
   }
 
   function clickAntes() {
