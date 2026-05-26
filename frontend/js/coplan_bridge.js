@@ -19448,3 +19448,63 @@
   };
 })();
 </script>
+<script>
+(function () {
+  'use strict';
+  // ---- Secoes colapsaveis no Cadastro ----
+  // Clique no cabecalho do card expande/comprime o corpo (esconde como
+  // se estivesse "dentro" do titulo). Estado persistido por titulo em
+  // localStorage. Ignora cliques em controles do header (ex.: botao
+  // "Salvar como NOVA", pills, inputs) para nao colapsar sem querer.
+  var STORE_PREFIX = 'coplan:card-collapsed:';
+
+  function cardKey(card) {
+    var t = card.querySelector('.card-title');
+    return t ? t.textContent.replace(/\s+/g, ' ').trim() : '';
+  }
+  function loadCollapsed(key) {
+    try { return !!key && localStorage.getItem(STORE_PREFIX + key) === '1'; }
+    catch (e) { return false; }
+  }
+  function saveCollapsed(key, collapsed) {
+    if (!key) return;
+    try { localStorage.setItem(STORE_PREFIX + key, collapsed ? '1' : '0'); }
+    catch (e) { /* localStorage indisponivel: ignora */ }
+  }
+
+  function setupCard(card) {
+    if (card.__collapsibleBound) return;
+    var header = card.querySelector(':scope > .card-header');
+    if (!header) return;
+    card.__collapsibleBound = true;
+    header.classList.add('collapsible');
+    var key = cardKey(card);
+    if (loadCollapsed(key)) card.classList.add('collapsed');
+    header.addEventListener('click', function (ev) {
+      if (ev.target.closest(
+          'button, input, select, textarea, a, label, .pill, .badge')) {
+        return;
+      }
+      card.classList.toggle('collapsed');
+      saveCollapsed(key, card.classList.contains('collapsed'));
+    });
+  }
+
+  function setupAll() {
+    var scope = document.getElementById('tab-cadastro');
+    if (!scope) return;
+    scope.querySelectorAll('.card').forEach(setupCard);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupAll);
+  } else {
+    setupAll();
+  }
+  document.addEventListener('coplan:tab', function (ev) {
+    if (ev && ev.detail && ev.detail.name === 'cadastro') {
+      setTimeout(setupAll, 50);
+    }
+  });
+})();
+</script>

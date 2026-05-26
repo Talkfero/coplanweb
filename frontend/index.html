@@ -307,6 +307,22 @@
   .card-sub { font-size: 11.5px; color: var(--text-soft); }
   .card-body { padding: 16px; }
 
+  /* Secoes colapsaveis: clique no header expande/comprime o corpo. */
+  .card-header.collapsible { cursor: pointer; user-select: none; }
+  .card-header.collapsible::after {
+    content: "";
+    margin-left: auto;
+    width: 7px; height: 7px;
+    border-right: 2px solid var(--text-soft);
+    border-bottom: 2px solid var(--text-soft);
+    transform: rotate(45deg);
+    transition: transform .15s ease;
+    flex: 0 0 auto;
+  }
+  .card.collapsed > .card-header.collapsible::after { transform: rotate(-45deg); }
+  .card.collapsed > .card-header { border-bottom: none; }
+  .card.collapsed > .card-body { display: none; }
+
   /* ===== Tabs (subnav) ===== */
   .subnav {
     display: flex;
