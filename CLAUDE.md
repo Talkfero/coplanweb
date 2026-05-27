@@ -87,7 +87,33 @@ inline (`# noqa: BLE001`, `# noqa: PLC0415`, `# noqa: E731`).
   semântica), `[RB-*]` (regra de negócio), `[FIX]`. Mantenha o padrão ao mexer
   nas áreas correspondentes.
 - **Operações longas**: estado global `_OP_STATE` + helpers `_op_*`; worker em
-  thread atualiza progresso e o JS faz polling em `progress_state()`.
+  thread atualiza progresso e o JS faz polling em `progress_state()`. Sempre dê
+  feedback visível antes de uma fase síncrona pesada (ex.: o import abre
+  `coplanProgress.open(...)` durante a leitura/detecção de duplicidades, que
+  roda antes do modal de progresso real).
+
+## Performance / otimização
+
+- **Nada de query por linha em lote.** Operações que percorrem N linhas não
+  devem fazer 1 consulta ao banco por linha (vira O(N×obras)). Carregue uma vez
+  e consulte em memória. Ex.: a importação usa
+  `core/repositories/obra_query_repo.build_duplicate_index` (`DuplicateIndex`)
+  para detectar duplicidade em **O(linhas+obras)** — espelha exatamente
+  `find_duplicate` (COD_OBRA exato; composto alim+pi+ano [+município] com
+  desempate por descrição normalizada), com fallback para `find_duplicate_in_db`
+  por linha. Ao otimizar uma detecção/regra, **valide a equivalência** com a
+  versão antiga (mesma saída) antes de trocar.
+- **Tamanho de arquivo / "linhas".** O bundle de UI vive em
+  `frontend/js/bridge/*.js` (módulos por domínio, ~≤2k linhas cada; só
+  `70-hotfix-ux.js` é maior — IIFE único). `build_html()` concatena os módulos
+  em ordem alfabética **sem separador**: a junção é **byte-idêntica** ao bundle
+  anterior. Ao mexer nesses arquivos, preserve a divisão e a ordem (prefixo
+  numérico) — não reintroduza um arquivo monolítico.
+- **Diff inflado após squash-merge.** O fluxo mescla os PRs via **squash**, que
+  cria um commit novo na `main` sem compartilhar histórico com a branch. Para
+  uma mudança seguinte, **crie a branch a partir da `origin/main` atual** (não
+  da branch antiga já mesclada) — senão o diff "re-aplica" toda a sessão
+  (ex.: ~19k linhas da divisão do bridge) e fica enorme sem motivo.
 
 ## Busca inteligente (search_obras / Visualizar)
 
