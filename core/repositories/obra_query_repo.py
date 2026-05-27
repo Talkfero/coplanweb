@@ -115,6 +115,104 @@ def find_duplicate(
 
 
 # ---------------------------------------------------------------------------
+# Indice em memoria para deteccao de duplicidade em LOTE (import).
+# ---------------------------------------------------------------------------
+class DuplicateIndex:
+    """Indice em memoria que espelha ``find_duplicate``, mas carrega as
+    obras uma unica vez e consulta em O(1)/O(k) por linha -- em vez de 1
+    SELECT por linha (O(linhas x obras)) na importacao de planilhas.
+
+    Mesma semantica: COD_OBRA (match exato por ``cod``) ou composto
+    (alim, pi, ano [+ municipio]) com tie-break por descricao normalizada.
+    """
+
+    def __init__(
+        self, columns: Sequence[str], cod_col, alim_col, pi_col, ano_col,
+        mun_col, desc_col,
+    ) -> None:
+        self._cod_col = cod_col
+        self._alim_col = alim_col
+        self._pi_col = pi_col
+        self._ano_col = ano_col
+        self._mun_col = mun_col
+        self._desc_col = desc_col
+        self._by_cod: dict[str, dict] = {}
+        self._by_comp: dict[tuple, list[dict]] = {}
+
+    def add(self, row_map: dict) -> None:
+        if self._cod_col:
+            cv = row_map.get(self._cod_col)
+            if cv is not None and str(cv) != "":
+                self._by_cod[str(cv)] = row_map
+        if self._alim_col and self._pi_col and self._ano_col:
+            key = (
+                str(row_map.get(self._alim_col) or ""),
+                str(row_map.get(self._pi_col) or ""),
+                str(row_map.get(self._ano_col) or ""),
+            )
+            self._by_comp.setdefault(key, []).append(row_map)
+
+    def find(self, row: dict) -> Optional[dict]:
+        key = build_dup_key(row)
+        if key.startswith("COD_OBRA:") and self._cod_col:
+            cod_val = key.split(":", 1)[1]
+            return self._by_cod.get(str(cod_val))
+        if not (self._alim_col and self._pi_col and self._ano_col):
+            return None
+        alim_val = first_non_empty_value(
+            row, ["alimentador", "alimentador_principal", "circuito"])
+        pi_val = first_non_empty_value(
+            row, ["pi_base", "pi base", "pi", "projeto_investimento"])
+        ano_val = first_non_empty_value(row, ["ano", "ano_", "plano"])
+        if not alim_val or not pi_val or not ano_val:
+            return None
+        candidates = self._by_comp.get(
+            (str(alim_val), str(pi_val), str(ano_val)))
+        if not candidates:
+            return None
+        mun_val = first_non_empty_value(row, ["municipio", "município"])
+        if self._mun_col and mun_val:
+            candidates = [
+                c for c in candidates
+                if str(c.get(self._mun_col) or "") == str(mun_val)
+            ]
+            if not candidates:
+                return None
+        if not self._desc_col:
+            return candidates[0]
+        desc_norm = normalize_description(first_non_empty_value(
+            row, ["descricao_obra", "descricao", "descrição"]))
+        for c in candidates:
+            if normalize_description(c.get(self._desc_col, "")) == desc_norm:
+                return c
+        return None
+
+
+def build_duplicate_index(
+    cursor: sqlite3.Cursor, columns: Sequence[str],
+) -> DuplicateIndex:
+    """Carrega todas as obras 1x e devolve um ``DuplicateIndex`` pronto
+    para consultas em lote. Use no lugar de chamar ``find_duplicate`` por
+    linha quando ha muitas linhas (ex.: importacao de planilha)."""
+    cols = list(columns or [])
+    idx = DuplicateIndex(
+        cols,
+        find_column_name(cols, ["cod"]),
+        find_column_name(cols, ["alimentador_principal", "alimentador"]),
+        find_column_name(cols, ["pi_base", "projeto_investimento"]),
+        find_column_name(cols, ["ano_", "ano"]),
+        find_column_name(cols, ["municipio", "município"]),
+        find_column_name(cols, ["descricao_obra", "descricao", "descrição"]),
+    )
+    if not cols:
+        return idx
+    cursor.execute(build_select_sql("obras", cols))
+    for row in cursor.fetchall():
+        idx.add(dict(zip(cols, row)))
+    return idx
+
+
+# ---------------------------------------------------------------------------
 # Variante que levanta ObraDuplicadaError (Passo 7)
 # ---------------------------------------------------------------------------
 from core.exceptions import ObraDuplicadaError
