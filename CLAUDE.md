@@ -141,6 +141,22 @@ seguem na unidade própria. Os endpoints de resumo (e o `resumo_service`,
 compartilhado com o desktop) continuam retornando valores cheios; a conversão
 para milhões é só na camada de exibição (JS).
 
+**REGRA: priorize SEMPRE a boa visualização na aba Resumo.** Tabelas/cards
+devem ser legíveis — evite excesso de colunas/dígitos. Quando uma visão puder
+crescer demais (ex.: muitas colunas de ano), ofereça filtro/seleção em vez de
+despejar tudo.
+
+### Volumetria por PI x Ano (seleção de anos)
+A tabela "Volumetria por PI x Ano" (IIFE Fase A4 em `40-resumo.js`) tem um
+seletor de anos por chips (multi-seleção; usa a classe `.pill` mas **fora** de
+`.pill-row` para não cair no handler single-select do mock). O backend
+(`resumo_volumetria_financeiro`) devolve **todos** os anos; a filtragem de
+colunas é feita no JS (`renderTable` mantém PI + colunas dos anos
+selecionados). **Default: ano corrente + 4 anos à frente** (5 colunas de ano);
+se nenhum desses existir nos dados, cai para os 5 anos mais recentes
+disponíveis (`defaultYears`). Botões "Todos"/"Limpar" e clique no chip
+alternam a seleção.
+
 ## Busca inteligente (search_obras / Visualizar)
 
 A "Busca inteligente em todos os campos" deve cobrir **todos** os campos

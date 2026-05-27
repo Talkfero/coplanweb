@@ -544,6 +544,24 @@
     return String(s || '').trim().toLowerCase()
       .normalize('NFD').replace(/[̀-ͯ]/g, '');
   }
+  // Estado de modulo: ultimo payload completo + anos disponiveis/selecionados.
+  var fullState = null;
+  var availableYears = [];
+  var selectedYears = null;  // null = ainda nao inicializado (usa default)
+  function yearOf(h) { return String(h).split('\n')[0].trim(); }
+  // Default de visualizacao: ano corrente + 4 anos pra frente (5 colunas de
+  // ano). Se nenhum desses existir nos dados, cai para os 5 anos mais
+  // recentes disponiveis.
+  function defaultYears(years) {
+    var cur = new Date().getFullYear();
+    var want = [];
+    for (var k = 0; k < 5; k++) want.push(String(cur + k));
+    var sel = want.filter(function (y) { return years.indexOf(y) >= 0; });
+    if (sel.length) return sel;
+    return years.slice().filter(function (y) { return /^\d{4}$/.test(y); })
+      .sort(function (a, b) { return Number(b) - Number(a); })
+      .slice(0, 5);
+  }
   function ensureCard() {
     var scope = document.getElementById('tab-resumo');
     if (!scope) return null;
@@ -555,8 +573,13 @@
     card.innerHTML =
       '<div class="card-header">'
     +   '<div class="card-title"><i data-lucide="layers"></i> Volumetria por PI x Ano</div>'
+    +   '<span class="grow" style="flex:1;"></span>'
     + '</div>'
     + '<div class="card-body">'
+    +   '<div id="coplan-vol-pi-years" class="row" '
+    +        'style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'
+    +     '<span style="color:var(--text-soft);font-size:12px;margin-right:4px;">Anos:</span>'
+    +   '</div>'
     +   '<div class="table-scroll" style="max-height:360px;overflow:auto;">'
     +     '<table class="data-table" id="coplan-vol-pi-table">'
     +       '<thead><tr><th>PI</th></tr></thead>'
@@ -582,16 +605,63 @@
     if (window.lucide) lucide.createIcons();
     return card;
   }
-  function render(state) {
+  // Chips de ano (multi-selecao). Nao usa .pill-row de proposito: o handler
+  // global do mock torna .pill-row single-select.
+  function renderYearChips() {
+    var box = document.getElementById('coplan-vol-pi-years');
+    if (!box) return;
+    box.querySelectorAll('[data-year],[data-act]').forEach(function (n) {
+      n.remove();
+    });
+    availableYears.forEach(function (y) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pill' + (selectedYears.indexOf(y) >= 0 ? ' active' : '');
+      b.setAttribute('data-year', y);
+      b.textContent = y;
+      box.appendChild(b);
+    });
+    [['todos', 'Todos'], ['limpar', 'Limpar']].forEach(function (pair, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pill';
+      b.setAttribute('data-act', pair[0]);
+      if (i === 0) b.style.marginLeft = '8px';
+      b.textContent = pair[1];
+      box.appendChild(b);
+    });
+  }
+  function bindYearBox() {
+    var box = document.getElementById('coplan-vol-pi-years');
+    if (!box || box.__bound) return;
+    box.__bound = true;
+    box.addEventListener('click', function (ev) {
+      var t = ev.target.closest && ev.target.closest('[data-year],[data-act]');
+      if (!t || !box.contains(t)) return;
+      if (t.hasAttribute('data-act')) {
+        var act = t.getAttribute('data-act');
+        if (act === 'todos') selectedYears = availableYears.slice();
+        else selectedYears = [];
+      } else {
+        var y = t.getAttribute('data-year');
+        var idx = selectedYears.indexOf(y);
+        if (idx >= 0) selectedYears.splice(idx, 1);
+        else selectedYears.push(y);
+      }
+      renderYearChips();
+      renderTable(fullState);
+    });
+  }
+  function renderTable(state) {
     var card = ensureCard();
-    if (!card || !state) return;
+    if (!card) return;
     var thead = card.querySelector('thead');
     var tbody = card.querySelector('tbody');
     if (!thead || !tbody) return;
-    if (!state.ok) {
+    if (!state || !state.ok) {
       thead.innerHTML = '<tr><th>PI</th></tr>';
       tbody.innerHTML = '<tr><td style="padding:14px;color:var(--danger);">'
-                      + esc(state.error || 'Falha ao carregar volumetria')
+                      + esc((state && state.error) || 'Falha ao carregar volumetria')
                       + '</td></tr>';
       return;
     }
@@ -601,8 +671,16 @@
     var isValor = heads.map(function (h) {
       return String(h).indexOf('Valor') >= 0;
     });
-    var theadHtml = '<tr>';
+    var sel = selectedYears || [];
+    // Indices das colunas a manter: PI (0) + colunas dos anos selecionados.
+    var keep = [0];
     heads.forEach(function (h, i) {
+      if (i === 0) return;
+      if (sel.indexOf(yearOf(h)) >= 0) keep.push(i);
+    });
+    var theadHtml = '<tr>';
+    keep.forEach(function (i) {
+      var h = heads[i];
       var cls = (i === 0) ? '' : 'class="num"';
       var htxt = isValor[i]
         ? String(h).replace('Valor', 'Valor (R$ mi)') : h;
@@ -611,20 +689,51 @@
     });
     theadHtml += '</tr>';
     thead.innerHTML = theadHtml;
+    if (keep.length <= 1) {
+      tbody.innerHTML = '<tr><td style="padding:18px;text-align:center;color:var(--text-soft);">'
+                      + 'Selecione ao menos um ano.</td></tr>';
+      return;
+    }
     var linhas = state.linhas || [];
     if (!linhas.length) {
-      tbody.innerHTML = '<tr><td colspan="' + heads.length
+      tbody.innerHTML = '<tr><td colspan="' + keep.length
                       + '" style="padding:18px;text-align:center;color:var(--text-soft);">'
-                      + 'Sem dados para este ano.</td></tr>';
+                      + 'Sem dados.</td></tr>';
       return;
     }
     tbody.innerHTML = linhas.map(function (linha) {
-      return '<tr>' + linha.map(function (cel, i) {
+      return '<tr>' + keep.map(function (i) {
+        var cel = linha[i];
         var cls = (i === 0) ? '' : 'class="num mono"';
         var out = isValor[i] ? window.coplanFmtMi(parseBR(cel)) : cel;
         return '<td ' + cls + '>' + esc(out) + '</td>';
       }).join('') + '</tr>';
     }).join('');
+  }
+  function render(state) {
+    var card = ensureCard();
+    if (!card || !state) return;
+    bindYearBox();
+    if (state.ok) {
+      fullState = state;
+      var heads = state.cabecalhos || ['PI'];
+      availableYears = [];
+      heads.forEach(function (h, i) {
+        if (i === 0) return;
+        var y = yearOf(h);
+        if (availableYears.indexOf(y) < 0) availableYears.push(y);
+      });
+      if (selectedYears == null) {
+        selectedYears = defaultYears(availableYears);
+      } else {
+        selectedYears = selectedYears.filter(function (y) {
+          return availableYears.indexOf(y) >= 0;
+        });
+        if (!selectedYears.length) selectedYears = defaultYears(availableYears);
+      }
+      renderYearChips();
+    }
+    renderTable(state);
   }
   function isVolView() {
     var scope = document.getElementById('tab-resumo');
