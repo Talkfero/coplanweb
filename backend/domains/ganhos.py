@@ -629,6 +629,58 @@ class GanhosMixin:
         return dados or {}, ""
 
     @staticmethod
+    def _ganhos_extrair_ano(lines: Any) -> str:
+        """Extrai o ano do cabecalho de um arquivo do Interplan
+        (ex.: linha 'Ano: 2025' no FlowMT.TXT). Retorna '' se nao achar."""
+        import re  # noqa: PLC0415
+        for line in (lines or []):
+            m = re.search(r"Ano:\s*(\d{4})", str(line))
+            if m:
+                return m.group(1)
+        return ""
+
+    def _ganhos_validar_ano(
+        self, data_flow: Any, ano_obra: Any,
+    ) -> tuple[str, str]:
+        """Compara o ano do cabecalho dos arquivos do Interplan com o ano
+        da obra. Retorna (ano_arquivo, msg_erro). So bloqueia (msg_erro
+        nao-vazio) quando AMBOS estao presentes e divergem."""
+        ano_obra_s = str(ano_obra or "").strip()
+        ano_arq = self._ganhos_extrair_ano(data_flow)
+        if not ano_obra_s or not ano_arq:
+            return ano_arq, ""
+        if ano_arq != ano_obra_s:
+            return ano_arq, (
+                f"O ano dos arquivos do Interplan (Ano: {ano_arq}) e diferente "
+                f"do ano da obra ({ano_obra_s}). Gere os ganhos no Interplan "
+                f"para o ano {ano_obra_s} e selecione a pasta correta antes de "
+                f"inserir os ganhos."
+            )
+        return ano_arq, ""
+
+    def _ganhos_validar_ano_registrado(
+        self, data_flow: Any, ano_obra: Any,
+    ) -> tuple[str, str]:
+        """Para Ganhos Atuais (registrados): o ano dos arquivos do Interplan
+        deve ser ANTERIOR (menor) ao ano da obra. Retorna (ano_arquivo,
+        msg_erro). So bloqueia quando ambos presentes e ano_arq >= ano_obra."""
+        ano_obra_s = str(ano_obra or "").strip()
+        ano_arq = self._ganhos_extrair_ano(data_flow)
+        if not ano_obra_s or not ano_arq:
+            return ano_arq, ""
+        try:
+            if int(ano_arq) < int(ano_obra_s):
+                return ano_arq, ""
+        except ValueError:
+            return ano_arq, ""
+        return ano_arq, (
+            f"Para Ganhos Atuais (registrados), o ano dos arquivos do Interplan "
+            f"(Ano: {ano_arq}) deve ser ANTERIOR ao ano da obra ({ano_obra_s}). "
+            f"Selecione arquivos de um ano anterior a {ano_obra_s} "
+            f"(ex.: {int(ano_obra_s) - 1 if ano_obra_s.isdigit() else ''})."
+        )
+
+    @staticmethod
     def _ganhos_filter_alims(
         alimentadores: list[str], buffers: list[Any],
     ) -> list[str]:
@@ -740,6 +792,7 @@ class GanhosMixin:
         alimentadores: Any = None,
         projeto_investimento: Any = "",
         pasta: Any = "",
+        ano_obra: Any = "",
     ) -> dict[str, Any]:
         """Calcula as 10 metricas + ganhos_totais 'antes' para uma obra.
         Equivalente a preencher_campos_antes do desktop, mas em uma
@@ -765,6 +818,12 @@ class GanhosMixin:
         data_flow = dados.get("FlowMT.TXT") or []
         data_topo = dados.get("Topologia.TXT") or []
         data_conf = dados.get("Confiabilidade.TXT") or []
+        # Ano do arquivo do Interplan deve coincidir com o ano da obra.
+        ano_arq, ano_err = self._ganhos_validar_ano(data_flow, ano_obra)
+        if ano_err:
+            return {"ok": False, "error": ano_err, "ano_mismatch": True,
+                    "ano_arquivo": ano_arq,
+                    "ano_obra": str(ano_obra or "").strip()}
         # Filtra alimentadores ausentes nos arquivos
         alims_validos = self._ganhos_filter_alims(
             alims, [data_flow, data_topo, data_conf])
@@ -848,6 +907,7 @@ class GanhosMixin:
         alimentadores: Any = None,
         projeto_investimento: Any = "",
         pasta: Any = "",
+        ano_obra: Any = "",
     ) -> dict[str, Any]:
         """Calcula as 7 metricas + ganhos_totais 'depois' para uma obra.
         Equivalente a preencher_campos_depois do desktop. Igual ao
@@ -872,6 +932,12 @@ class GanhosMixin:
         data_flow = dados.get("FlowMT.TXT") or []
         data_topo = dados.get("Topologia.TXT") or []
         data_conf = dados.get("Confiabilidade.TXT") or []
+        # Ano do arquivo do Interplan deve coincidir com o ano da obra.
+        ano_arq, ano_err = self._ganhos_validar_ano(data_flow, ano_obra)
+        if ano_err:
+            return {"ok": False, "error": ano_err, "ano_mismatch": True,
+                    "ano_arquivo": ano_arq,
+                    "ano_obra": str(ano_obra or "").strip()}
         alims_validos = self._ganhos_filter_alims(
             alims, [data_flow, data_topo, data_conf])
         if not alims_validos:
@@ -926,6 +992,7 @@ class GanhosMixin:
         self,
         alimentadores: Any = None,
         pasta: Any = "",
+        ano_obra: Any = "",
     ) -> dict[str, Any]:
         """Calcula 4 metricas + ganhos_totais_atual.
         Equivalente a preencher_parametros_atuais do desktop.
@@ -946,6 +1013,12 @@ class GanhosMixin:
             return {"ok": False, "error": err}
         data_flow = dados.get("FlowMT.TXT") or []
         data_topo = dados.get("Topologia.TXT") or []
+        # Registrado deve vir de um ano ANTERIOR ao ano da obra.
+        ano_arq, ano_err = self._ganhos_validar_ano_registrado(data_flow, ano_obra)
+        if ano_err:
+            return {"ok": False, "error": ano_err, "ano_mismatch": True,
+                    "ano_arquivo": ano_arq,
+                    "ano_obra": str(ano_obra or "").strip()}
         try:
             tensao_min, _ = cm.calcular_tensoes(data_flow, alims)
             tensao_min_linha = cm.calcular_tensao_linha_minima(data_flow, alims)

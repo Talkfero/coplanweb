@@ -307,6 +307,22 @@
   .card-sub { font-size: 11.5px; color: var(--text-soft); }
   .card-body { padding: 16px; }
 
+  /* Secoes colapsaveis: clique no header expande/comprime o corpo. */
+  .card-header.collapsible { cursor: pointer; user-select: none; }
+  .card-header.collapsible::after {
+    content: "";
+    margin-left: auto;
+    width: 7px; height: 7px;
+    border-right: 2px solid var(--text-soft);
+    border-bottom: 2px solid var(--text-soft);
+    transform: rotate(45deg);
+    transition: transform .15s ease;
+    flex: 0 0 auto;
+  }
+  .card.collapsed > .card-header.collapsible::after { transform: rotate(-45deg); }
+  .card.collapsed > .card-header { border-bottom: none; }
+  .card.collapsed > .card-body { display: none; }
+
   /* ===== Tabs (subnav) ===== */
   .subnav {
     display: flex;
@@ -771,9 +787,6 @@
       <button class="sb-item" data-tab="cadastro">
         <i data-lucide="file-plus-2"></i><span>Cadastro de Obras</span>
       </button>
-      <button class="sb-item" data-tab="ganhos">
-        <i data-lucide="trending-up"></i><span>Ganhos</span>
-      </button>
       <button class="sb-item" data-tab="resumo">
         <i data-lucide="bar-chart-3"></i><span>Resumo / Volumetria</span>
       </button>
@@ -1041,11 +1054,11 @@
                     <input class="input mono" id="cad-input-item" placeholder="ex.: 001" />
                   </div>
 
-                  <div class="field col-7">
+                  <div class="field col-12">
                     <label>Projeto <span class="req" data-req-conditional="distribuicao" style="display:none;">*</span></label>
                     <div class="input-row">
                       <input class="input" id="cad-input-projeto" placeholder="Nome do projeto (não pode iniciar com 'Obra')" />
-                      <button class="btn" id="cad-btn-escolher" type="button" title="Escolher pasta de arquivos da obra"><i data-lucide="folder-search"></i> Escolher</button>
+                      <button class="btn" id="cad-btn-escolher" type="button" title="Escolher um projeto existente para carregar seus dados"><i data-lucide="folder-search"></i> Escolher</button>
                       <button class="btn" id="cad-btn-templates" type="button" title="Templates de descricao"><i data-lucide="bookmark"></i> Templates</button>
                     </div>
                     <span class="helper">Não pode iniciar com "Obra".</span>
@@ -1059,12 +1072,6 @@
                       <button class="btn sm" id="cad-btn-multi-pi" data-act="nome-projeto:multi-pi" type="button" title="Selecionar multiplos PIs para esta obra"><i data-lucide="list-checks"></i> Multi-PI</button>
                     </div>
                   </div>
-                  <div class="field col-5" id="cad-row-nome-combo" title="Atalho: ao escolher um nome aqui, preenche o campo 'Projeto' acima (ex.: 'Melhorias AL' -> 'Melhorias_AL_').">
-                    <label>Atalho de Nome do Projeto</label>
-                    <select class="select" id="cad-sel-nome-projeto-combo"><option value="">— selecione —</option></select>
-                    <span class="helper">Sugestões da planilha de apoio + opções comuns.</span>
-                  </div>
-
                   <div class="field col-12">
                     <label>Observações</label>
                     <textarea class="textarea" id="cad-input-observacoes" placeholder="Notas técnicas, justificativas, anexos relacionados..."></textarea>
@@ -1160,7 +1167,7 @@
                   <div class="field col-8">
                     <label>COD_PEP gerado</label>
                     <input class="input mono" id="cad-input-cod-pep"
-                           placeholder="Sigla-Ano-PI-Item (gerado automaticamente)" disabled/>
+                           placeholder="Sigla-Ano-Regional-Agrup-Seq-Letra (gerado automaticamente)" disabled/>
                   </div>
                 </div>
                 <!-- Linha 2: Valor da Obra (com prefixo R$) + botão Calcular -->
@@ -1272,6 +1279,63 @@
               </div>
             </div>
 
+            <!-- Critérios de Planejamento (movido da seção Ganhos): avalia
+                 os ganhos calculados contra os criterios vigentes. -->
+            <div class="card mt-3" id="ganhos-card-criterios">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="check-circle"></i> Critérios de Planejamento</div>
+              </div>
+              <div class="card-body">
+                <!-- G005: 4 checks declarativos populados por get_criterios().regras[] via JS. -->
+                <div id="ganhos-criterios-list" style="display:flex;flex-direction:column;gap:8px;">
+                  <div class="row" data-criterio="tensao_min" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                    <span>Tensão mínima</span>
+                    <span class="badge">—</span>
+                  </div>
+                  <div class="row" data-criterio="tensao_max" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                    <span>Tensão máxima</span>
+                    <span class="badge">—</span>
+                  </div>
+                  <div class="row" data-criterio="carregamento" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                    <span>Carregamento</span>
+                    <span class="badge">—</span>
+                  </div>
+                  <div class="row" data-criterio="clientes" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
+                    <span>Clientes</span>
+                    <span class="badge">—</span>
+                  </div>
+                </div>
+                <!-- G005: labels Planejamento (atendeu critérios) e Postergação (suporta degradação). -->
+                <div id="ganhos-label-planejamento" data-state="pending" class="mt-3" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
+                  <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
+                  Aguardando dados para avaliar Planejamento
+                </div>
+                <div id="ganhos-label-posterga" data-state="pending" class="mt-2" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
+                  <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
+                  Aguardando dados para avaliar Postergação
+                </div>
+              </div>
+            </div>
+
+            <!-- Arquivos de ganhos (Interplan): caminho da pasta com os
+                 arquivos tecnicos gerados pelo Interplan, de onde os ganhos
+                 da obra sao extraidos. -->
+            <div class="card mt-3" id="ganhos-card-pasta">
+              <div class="card-header">
+                <div class="card-title"><i data-lucide="folder-open"></i> Arquivos de ganhos (Interplan)</div>
+                <span class="grow"></span>
+                <span class="badge" id="ganhos-badge-arquivos"><span class="dot"></span>—</span>
+              </div>
+              <div class="card-body" style="padding: 12px 16px;">
+                <div class="helper" style="margin-bottom:8px;line-height:1.4;">Caminho da pasta com os arquivos gerados pelo Interplan (FlowMT.TXT, Topologia.TXT, Confiabilidade.TXT) de onde os ganhos da obra são extraídos.</div>
+                <div class="input-row" style="flex-wrap:wrap;gap:6px;">
+                  <input class="input mono" id="ganhos-input-pasta" style="flex:1 1 100%;" placeholder="Selecione a pasta dos arquivos do Interplan" />
+                  <button class="btn" id="ganhos-btn-selecionar" type="button" title="Selecionar pasta dos arquivos tecnicos (FlowMT.TXT, Topologia.TXT, Confiabilidade.TXT)"><i data-lucide="folder-search"></i> Selecionar</button>
+                  <button class="btn" id="ganhos-btn-recarregar" type="button" title="Recontar arquivos da pasta"><i data-lucide="refresh-ccw"></i> Recarregar</button>
+                </div>
+              </div>
+            </div>
+
             <!-- Status da Nota: informativo (sem bloqueio).
                  Visível só quando há despacho_status preenchido na obra
                  carregada. Avisa o operador que está editando obra
@@ -1301,27 +1365,9 @@
             </div>
           </aside>
         </div>
-      </section>
 
-      <!-- ===== TAB: GANHOS ===== -->
-      <section class="tab-panel" id="tab-ganhos">
-        <div class="row mt-2" style="margin-bottom:14px;">
-          <div class="card grow" id="ganhos-card-pasta">
-            <div class="card-header">
-              <div class="card-title"><i data-lucide="folder-open"></i> Pasta de arquivos do alimentador</div>
-              <span class="grow"></span>
-              <span class="badge" id="ganhos-badge-arquivos"><span class="dot"></span>—</span>
-            </div>
-            <div class="card-body" style="padding: 12px 16px;">
-              <div class="input-row">
-                <input class="input mono" id="ganhos-input-pasta" placeholder="Selecione a pasta dos arquivos técnicos (FlowMT.TXT, Topologia.TXT, ...)" />
-                <button class="btn" id="ganhos-btn-selecionar" type="button" title="Selecionar pasta dos arquivos tecnicos (FlowMT.TXT, Topologia.TXT, Confiabilidade.TXT)"><i data-lucide="folder-search"></i> Selecionar</button>
-                <button class="btn" id="ganhos-btn-recarregar" type="button" title="Recontar arquivos da pasta"><i data-lucide="refresh-ccw"></i> Recarregar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        <!-- ===== GANHOS (integrado ao Cadastro) ===== -->
+        <section id="tab-ganhos" class="active" style="margin-top:14px;">
         <div class="card" id="ganhos-card-parametros">
           <div class="card-header">
             <div class="card-title" id="ganhos-card-parametros-title"><i data-lucide="trending-up"></i> Parâmetros de Ganhos — <span id="ganhos-alim-atual">—</span></div>
@@ -1370,43 +1416,8 @@
               <button class="btn mt-2" id="btn-ganhos-atual" type="button" title="Calcula tensoes min/max e carregamento atuais (sem contexto de obra). Usa apenas FlowMT.TXT + Topologia.TXT"><i data-lucide="arrow-up-from-line"></i> Preencher parâmetros atuais</button>
             </div>
           </div>
-
-          <div class="card" id="ganhos-card-criterios" style="width: 380px;">
-            <div class="card-header">
-              <div class="card-title"><i data-lucide="check-circle"></i> Critérios de Planejamento</div>
-            </div>
-            <div class="card-body">
-              <!-- G005: 4 checks declarativos populados por get_criterios().regras[] via JS. -->
-              <div id="ganhos-criterios-list" style="display:flex;flex-direction:column;gap:8px;">
-                <div class="row" data-criterio="tensao_min" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
-                  <span>Tensão mínima</span>
-                  <span class="badge">—</span>
-                </div>
-                <div class="row" data-criterio="tensao_max" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
-                  <span>Tensão máxima</span>
-                  <span class="badge">—</span>
-                </div>
-                <div class="row" data-criterio="carregamento" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
-                  <span>Carregamento</span>
-                  <span class="badge">—</span>
-                </div>
-                <div class="row" data-criterio="clientes" data-state="pending" style="justify-content:space-between;font-size:12.5px;">
-                  <span>Clientes</span>
-                  <span class="badge">—</span>
-                </div>
-              </div>
-              <!-- G005: labels Planejamento (atendeu critérios) e Postergação (suporta degradação). -->
-              <div id="ganhos-label-planejamento" data-state="pending" class="mt-3" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
-                <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
-                Aguardando dados para avaliar Planejamento
-              </div>
-              <div id="ganhos-label-posterga" data-state="pending" class="mt-2" style="padding:10px 12px;background:var(--surface-2);border-radius:6px;font-size:12px;color:var(--text-muted);">
-                <i data-lucide="circle" style="width:13px;height:13px;display:inline-block;vertical-align:-2px;color:var(--text-soft);"></i>
-                Aguardando dados para avaliar Postergação
-              </div>
-            </div>
-          </div>
         </div>
+        </section>
       </section>
 
       <!-- ===== TAB: RESUMO ===== -->

@@ -617,6 +617,17 @@ class BancoMixin:
         except Exception:  # noqa: BLE001
             pass  # noqa: BLE001
 
+        # ----- Registra no ledger os cod_pep que vieram na planilha -----
+        # Importacao prioriza o cod_pep do Excel (preservado). Para que
+        # esses tambem fiquem reservados (e nao sejam reaproveitados se a
+        # obra for excluida depois), reaplica o backfill de cod_pep_emitidos.
+        try:
+            ensure_ledger = getattr(db, "_ensure_cod_pep_ledger", None)
+            if callable(ensure_ledger):
+                ensure_ledger()
+        except Exception:  # noqa: BLE001
+            pass
+
         # ----- M20 grava arquivo de log .txt -----
         log_path = ""
         if error_log:
@@ -1322,6 +1333,95 @@ class BancoMixin:
             return out
         return {"ok": True, "preenchidos": preenchidos, "error": ""}
 
+    def cod_pep_zerar(self, confirmacao: Any = "") -> dict[str, Any]:
+        """Zera o COD_PEP de TODAS as obras (acao destrutiva de admin).
+        Exige confirmacao == 'ZERAR' (trava anti-acidente, espelha o
+        'EXCLUIR' da exclusao). Retorna {ok, zerados}."""
+        if str(confirmacao or "").strip().upper() != "ZERAR":
+            return {"ok": False, "zerados": 0,
+                    "error": "confirmacao invalida: digite ZERAR"}
+        db, err = self._ensure_db_connected()
+        if err or db is None:
+            return {"ok": False, "zerados": 0,
+                    "error": err or "db indisponivel"}
+        try:
+            zerados = int(db.zerar_cod_pep() or 0)
+        except Exception as exc:  # noqa: BLE001
+            friendly = self._friendly_busy_error(exc)
+            out: dict[str, Any] = {
+                "ok": False, "zerados": 0,
+                "error": friendly or f"zerar_cod_pep: {exc}",
+            }
+            if friendly:
+                out["blocked"] = "db_busy"
+            return out
+        return {"ok": True, "zerados": zerados, "error": ""}
+
+    # --- Gerenciamento do registro de COD_PEP emitidos ---------------
+
+    def cod_pep_ledger_list(
+        self, termo: Any = "", empresa: Any = "", yy: Any = "",
+        status: Any = "", limit: Any = 1000, offset: Any = 0,
+    ) -> dict[str, Any]:
+        """Lista o registro de PEPs emitidos (cod_pep_emitidos) com filtros
+        opcionais (status = ''|'liberavel'|'em_uso'). Retorna
+        {ok, rows, total, error}."""
+        db, err = self._ensure_db_connected()
+        if err or db is None:
+            return {"ok": False, "rows": [], "total": 0,
+                    "error": err or "db indisponivel"}
+        try:
+            rows, total = db.cod_pep_ledger_list(
+                termo=str(termo or ""), empresa=str(empresa or ""),
+                yy=str(yy or ""), status=str(status or ""),
+                limit=int(limit or 1000), offset=int(offset or 0),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "rows": [], "total": 0,
+                    "error": f"ledger_list: {exc}"}
+        return {"ok": True, "rows": rows, "total": int(total or 0),
+                "error": ""}
+
+    def cod_pep_ledger_add(self, cod_pep: Any = "", obra_cod: Any = "") -> dict[str, Any]:
+        """Reserva manualmente um COD_PEP no registro. Retorna {ok, added}."""
+        cod = str(cod_pep or "").strip()
+        if not cod:
+            return {"ok": False, "added": 0, "error": "cod_pep vazio"}
+        db, err = self._ensure_db_connected()
+        if err or db is None:
+            return {"ok": False, "added": 0, "error": err or "db indisponivel"}
+        try:
+            added = int(db.cod_pep_ledger_add(cod, str(obra_cod or "")) or 0)
+        except ValueError as exc:
+            return {"ok": False, "added": 0, "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            friendly = self._friendly_busy_error(exc)
+            return {"ok": False, "added": 0,
+                    "error": friendly or f"ledger_add: {exc}"}
+        return {"ok": True, "added": added, "error": "",
+                "ja_existia": added == 0}
+
+    def cod_pep_ledger_remove(
+        self, empresa: Any = "", yy: Any = "", seq: Any = "",
+    ) -> dict[str, Any]:
+        """Remove uma reserva do registro (libera o SSSS do ano).
+        Retorna {ok, removed}."""
+        try:
+            seq_i = int(seq)
+        except Exception:  # noqa: BLE001
+            return {"ok": False, "removed": 0, "error": "seq invalido"}
+        db, err = self._ensure_db_connected()
+        if err or db is None:
+            return {"ok": False, "removed": 0, "error": err or "db indisponivel"}
+        try:
+            removed = int(db.cod_pep_ledger_remove(
+                str(empresa or ""), str(yy or ""), seq_i) or 0)
+        except Exception as exc:  # noqa: BLE001
+            friendly = self._friendly_busy_error(exc)
+            return {"ok": False, "removed": 0,
+                    "error": friendly or f"ledger_remove: {exc}"}
+        return {"ok": True, "removed": removed, "error": ""}
+
     # --- Fase 6: CSV import/export -----------------------------------
 
     def csv_export(self, destino: Any = "") -> dict[str, Any]:
@@ -1372,6 +1472,13 @@ class BancoMixin:
         if not ok:
             return {"ok": False, "ignorados": int(ignorados or 0),
                     "error": "importacao falhou"}
+        # Reserva no ledger os cod_pep vindos do CSV (idempotente).
+        try:
+            ensure_ledger = getattr(db, "_ensure_cod_pep_ledger", None)
+            if callable(ensure_ledger):
+                ensure_ledger()
+        except Exception:  # noqa: BLE001
+            pass
         return {"ok": True, "ignorados": int(ignorados or 0), "error": ""}
 
     def csv_pick_and_import(self) -> dict[str, Any]:

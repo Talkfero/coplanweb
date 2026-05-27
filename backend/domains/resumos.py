@@ -408,15 +408,16 @@ class ResumosMixin:
         if err or db is None:
             return {"ok": False, "items": [], "error": err or "db indisponivel"}
         try:
-            cursor = db._get_cursor()
-            if cursor is None:
-                return {"ok": False, "items": [], "error": "cursor"}
-            cursor.execute(
-                "SELECT DISTINCT TRIM(nome_projeto) FROM obras"
-                " WHERE TRIM(COALESCE(nome_projeto,''))<>''"
-                " ORDER BY 1"
-            )
-            items = [str(r[0]).strip() for r in cursor.fetchall() if r[0]]
+            with db._with_connection():
+                cursor = db._get_cursor()
+                if cursor is None:
+                    return {"ok": False, "items": [], "error": "cursor"}
+                cursor.execute(
+                    "SELECT DISTINCT TRIM(nome_projeto) FROM obras"
+                    " WHERE TRIM(COALESCE(nome_projeto,''))<>''"
+                    " ORDER BY 1"
+                )
+                items = [str(r[0]).strip() for r in cursor.fetchall() if r[0]]
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "items": [], "error": f"sql: {exc}"}
         return {"ok": True, "items": items, "error": ""}

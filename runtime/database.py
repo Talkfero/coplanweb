@@ -641,8 +641,17 @@ def cod_pep(
             f"Valor calculado: {agrup}."
         )
 
-    # SSSS é único por empresa em toda a base: consulta GLOBAL, sem escopo.
-    max_seq = -1
+    # SSSS é único por empresa DENTRO DO ANO DE GERAÇÃO (YY): reinicia a
+    # cada ano, pois o YY já diferencia o COD_PEP (26-...-0001 ≠ 27-...-0001),
+    # então não há sobrescrita e a identidade da obra não se perde.
+    # Aloca o MENOR sequencial disponível no ano (preenche buracos): escolhe
+    # o primeiro inteiro >= 0 não ocupado. Reaproveita faixas livres antes
+    # de avançar (ex.: 125..499 livres com 500..888 ocupados -> usa 125,
+    # depois 889). Sequenciais já existentes nunca mudam.
+    # "Em uso" (no ano YY) = SSSS nas obras atuais UNIÃO SSSS já emitidos
+    # algum dia (tabela cod_pep_emitidos, escopada por empresa+yy): assim um
+    # SSSS de obra EXCLUÍDA do mesmo ano permanece reservado e nunca volta.
+    used_seqs: set[int] = set()
     cursor.execute(
         "SELECT cod_pep FROM obras "
         "WHERE empresa=? "
@@ -651,13 +660,24 @@ def cod_pep(
     )
     for (cod_existente,) in cursor.fetchall():
         parsed = parse_cod_pep(cod_existente)
-        if parsed and parsed["empresa"] == empresa:
-            max_seq = max(max_seq, int(parsed["seq"]))
-    seq = max_seq + 1
+        if parsed and parsed["empresa"] == empresa and parsed["yy"] == yy:
+            used_seqs.add(int(parsed["seq"]))
+    try:
+        cursor.execute(
+            "SELECT seq FROM cod_pep_emitidos WHERE empresa=? AND yy=?",
+            (empresa, yy),
+        )
+        for (seq_emit,) in cursor.fetchall():
+            used_seqs.add(int(seq_emit))
+    except Exception:  # noqa: BLE001
+        pass  # tabela pode não existir em banco ainda não migrado
+    seq = 0
+    while seq in used_seqs:
+        seq += 1
     if not (0 <= int(seq) <= 9999):
         raise ValueError(
-            f"Limite de sequencial SSSS excedido para empresa {empresa}. "
-            f"Valor calculado: {seq}."
+            f"Não há sequencial SSSS livre (0000-9999) para empresa "
+            f"{empresa} no ano {yy}."
         )
 
     bay_local = obra.get("novo_bay")
@@ -696,6 +716,19 @@ def cod_pep(
 
     letra = "A" if projeto_tem_bay_novo else "U"
     resultado = f"{empresa}-{yy}-{regional_cod}-{int(agrup):03d}-{int(seq):04d}-{letra}"
+    # Reserva permanente do SSSS no registro de emitidos (INSERT OR IGNORE).
+    # Comita junto com a escrita da obra; se a obra for excluida depois, o
+    # registro permanece e o SSSS nunca volta a ser disponibilizado.
+    try:
+        cursor.execute(
+            "INSERT OR IGNORE INTO cod_pep_emitidos "
+            "(empresa, yy, seq, cod_pep, obra_cod, emitido_em) "
+            "VALUES (?,?,?,?,?,?)",
+            (empresa, yy, int(seq), resultado, obra_id,
+             datetime.datetime.now().strftime('%d/%m/%y %H:%M')),
+        )
+    except Exception:  # noqa: BLE001
+        pass  # tabela pode não existir em banco ainda não migrado
     debug_msg = (
         f"COD_PEP DEBUG obra={obra_id} empresa={empresa} yy={yy} "
         f"regional_cod={regional_cod} agrup={int(agrup):03d} seq={int(seq):04d} letra={letra}"
@@ -918,7 +951,10 @@ class DatabaseManager:
         t_total = ts_now()
         if not self.db_path:
             return
-        if self.data_access_layer is None:
+        # Recria o DAL quando e None OU aponta para outro banco (troca de
+        # banco) -- senao continuaria lendo o banco anterior.
+        if (self.data_access_layer is None
+                or getattr(self.data_access_layer, "db_path", None) != self.db_path):
             t_dal = ts_now()
             self.data_access_layer = DataAccessLayer(
                 self.db_path,
@@ -938,7 +974,11 @@ class DatabaseManager:
     def _refresh_cache(self) -> None:
         if not self.db_path:
             return
-        if self.data_access_layer is None:
+        # Recria o DAL quando ele e None OU aponta para outro banco (troca
+        # de banco): o ObraReadRepo guarda db_path no construtor, entao
+        # reusar o antigo releria o banco anterior.
+        if (self.data_access_layer is None
+                or getattr(self.data_access_layer, "db_path", None) != self.db_path):
             self.data_access_layer = DataAccessLayer(
                 self.db_path,
                 self.columns,
@@ -1083,6 +1123,11 @@ class DatabaseManager:
         t_refresh = ts_now()
         self._refresh_cache()
         ts_log("após _refresh_cache()", t_refresh)
+        # Registro permanente de PEPs emitidos (cria tabela + backfill).
+        try:
+            self._ensure_cod_pep_ledger()
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Falha ao garantir cod_pep_emitidos: %s", exc)
         ts_log("connect(): FIM", t_connect_total)
         log_connect_debug(
             "db_manager.connect.success",
@@ -2159,7 +2204,7 @@ class DatabaseManager:
                 LOGGER.warning("Sigla de empresa indisponível para preencher COD_PEP: %s", exc)
 
             cursor.execute(
-                "SELECT cod, ano_, nome_projeto, codigo_item, nome_regional, novo_bay, empresa, cod_pep FROM obras"
+                "SELECT cod, ano_, nome_projeto, codigo_item, nome_regional, novo_bay, tipo_pacote, empresa, cod_pep FROM obras"
             )
             rows = cursor.fetchall()
             if not rows:
@@ -2185,7 +2230,7 @@ class DatabaseManager:
                 ),
             )
 
-            for cod, ano_, nome_projeto, codigo_item, nome_regional, novo_bay, empresa, cod_atual in rows:
+            for cod, ano_, nome_projeto, codigo_item, nome_regional, novo_bay, tipo_pacote, empresa, cod_atual in rows:
                 cod_id = str(cod or "").strip() or "<sem-cod>"
                 empresa_norm = normalize_text(empresa)
                 cod_pep_atual = str(cod_atual or "").strip()
@@ -2223,6 +2268,7 @@ class DatabaseManager:
                     "codigo_item": codigo_item,
                     "nome_regional": nome_regional,
                     "novo_bay": novo_bay,
+                    "tipo_pacote": tipo_pacote,
                     "empresa": empresa_norm,
                 }
                 try:
@@ -2253,6 +2299,241 @@ class DatabaseManager:
             empresa_ajustada,
         )
         return preenchidos
+
+    @run_write_in_qthread_if_ui_thread
+    @with_lock_action("Zerar COD_PEP da base")
+    @retry_on_busy()
+    def zerar_cod_pep(self) -> int:
+        """Esvazia o COD_PEP de TODAS as obras (acao destrutiva de admin)
+        e LIMPA o registro de PEPs emitidos (cod_pep_emitidos). Retorna a
+        contagem de obras afetadas. Apos zerar, a numeracao recomeca de
+        fato do menor SSSS (0000) -- reset completo."""
+        afetadas = 0
+        with self._with_connection():
+            cursor = self._get_cursor()
+            if not cursor:
+                return 0
+            cols = self.get_column_names()
+            if "cod_pep" not in cols:
+                return 0
+            cod_pep_sql = self._escape_identifier("cod_pep")
+            with self.write_transaction():
+                cursor.execute(
+                    f"UPDATE obras SET {cod_pep_sql}='' "
+                    f"WHERE {cod_pep_sql} IS NOT NULL "
+                    f"AND TRIM({cod_pep_sql})<>''"
+                )
+                afetadas = int(cursor.rowcount or 0)
+                # Reset real: limpa tambem o registro de emitidos, senao a
+                # numeracao nao recomecaria do 0000 (os antigos seguiriam
+                # reservados).
+                try:
+                    cursor.execute("DELETE FROM cod_pep_emitidos")
+                except Exception:  # noqa: BLE001
+                    pass  # tabela pode ainda nao existir
+        self._refresh_cache()
+        LOGGER.info("zerar_cod_pep: obras afetadas=%s", afetadas)
+        print(f"COD_PEP ZERAR: afetadas={afetadas}")
+        return afetadas
+
+    def _ensure_cod_pep_ledger(self) -> None:
+        """Cria a tabela ``cod_pep_emitidos`` (registro PERMANENTE de cada
+        SSSS ja emitido por empresa+ano) e a semeia com os cod_pep atuais
+        das obras. Um SSSS, uma vez emitido naquele ano (YY), fica reservado
+        -- mesmo que a obra seja excluida -- evitando que um cod_pep liberado
+        por exclusao seja reaproveitado. A numeracao reinicia a cada ano
+        (escopo empresa+yy)."""
+        if not self.conn:
+            with self._with_connection():
+                return self._ensure_cod_pep_ledger()
+        cursor = self._get_cursor()
+        if not cursor:
+            return
+        try:
+            with self.write_transaction():
+                # Migracao: schema antigo (sem coluna yy) e' recriado. A
+                # tabela e' recurso novo (nao publicado), entao DROP e' seguro
+                # -- o backfill repovoa a partir das obras.
+                cursor.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name='cod_pep_emitidos'"
+                )
+                if cursor.fetchone():
+                    cursor.execute("PRAGMA table_info(cod_pep_emitidos)")
+                    cols_tab = [c[1] for c in cursor.fetchall()]
+                    if "yy" not in cols_tab:
+                        cursor.execute("DROP TABLE cod_pep_emitidos")
+                cursor.execute(
+                    "CREATE TABLE IF NOT EXISTS cod_pep_emitidos ("
+                    " empresa TEXT NOT NULL,"
+                    " yy TEXT NOT NULL,"
+                    " seq INTEGER NOT NULL,"
+                    " cod_pep TEXT,"
+                    " obra_cod TEXT,"
+                    " emitido_em TEXT,"
+                    " PRIMARY KEY (empresa, yy, seq))"
+                )
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Falha ao criar cod_pep_emitidos: %s", exc)
+            return
+        # Backfill: registra os cod_pep ja existentes nas obras (idempotente).
+        try:
+            cursor.execute(
+                "SELECT empresa, cod_pep, cod FROM obras "
+                "WHERE cod_pep IS NOT NULL AND TRIM(cod_pep)<>''"
+            )
+            rows = cursor.fetchall()
+        except Exception:  # noqa: BLE001
+            return
+        agora = datetime.datetime.now().strftime('%d/%m/%y %H:%M')
+        to_insert = []
+        for empresa_r, cod_pep_r, obra_cod in rows:
+            parsed = parse_cod_pep(cod_pep_r)
+            if not parsed:
+                continue
+            emp = normalize_text(empresa_r) or parsed.get("empresa") or ""
+            if not emp:
+                continue
+            to_insert.append(
+                (emp, str(parsed["yy"]), int(parsed["seq"]), str(cod_pep_r),
+                 str(obra_cod or ""), agora))
+        if to_insert:
+            try:
+                with self.write_transaction():
+                    cursor.executemany(
+                        "INSERT OR IGNORE INTO cod_pep_emitidos "
+                        "(empresa, yy, seq, cod_pep, obra_cod, emitido_em) "
+                        "VALUES (?,?,?,?,?,?)",
+                        to_insert,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("Falha no backfill de cod_pep_emitidos: %s", exc)
+
+    def cod_pep_ledger_list(
+        self, termo: str = "", empresa: str = "", yy: str = "",
+        status: str = "", limit: int = 1000, offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Lista o registro de PEPs emitidos com filtros opcionais
+        (termo casa cod_pep/obra_cod; empresa e yy exatos; status =
+        ''|'liberavel'|'em_uso'). Retorna (linhas, total) -- total ignora
+        limit/offset (para paginacao)."""
+        self._ensure_cod_pep_ledger()
+        with self._with_connection():
+            cursor = self._get_cursor()
+            if not cursor:
+                return [], 0
+            where: list[str] = []
+            params: list[Any] = []
+            emp = normalize_text(empresa)
+            if emp:
+                where.append("empresa=?")
+                params.append(emp)
+            yy_s = str(yy or "").strip()
+            if yy_s:
+                where.append("yy=?")
+                params.append(yy_s)
+            termo_s = str(termo or "").strip()
+            if termo_s:
+                where.append("(UPPER(cod_pep) LIKE ? OR UPPER(obra_cod) LIKE ?)")
+                like = "%" + termo_s.upper() + "%"
+                params.extend([like, like])
+            # Filtro por status (vinculo com obra existente).
+            status_s = str(status or "").strip().lower()
+            _obras_sub = (
+                "SELECT UPPER(TRIM(cod_pep)) FROM obras "
+                "WHERE cod_pep IS NOT NULL AND TRIM(cod_pep)<>''"
+            )
+            if status_s == "em_uso":
+                where.append(f"UPPER(TRIM(cod_pep)) IN ({_obras_sub})")
+            elif status_s == "liberavel":
+                where.append(f"UPPER(TRIM(cod_pep)) NOT IN ({_obras_sub})")
+            wsql = (" WHERE " + " AND ".join(where)) if where else ""
+            try:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM cod_pep_emitidos" + wsql, params)
+                total = int((cursor.fetchone() or [0])[0] or 0)
+                cursor.execute(
+                    "SELECT empresa, yy, seq, cod_pep, obra_cod, emitido_em "
+                    "FROM cod_pep_emitidos" + wsql
+                    + " ORDER BY empresa, yy, seq LIMIT ? OFFSET ?",
+                    params + [int(limit), int(offset)],
+                )
+                rows = [
+                    {"empresa": r[0], "yy": r[1], "seq": int(r[2] or 0),
+                     "cod_pep": r[3] or "", "obra_cod": r[4] or "",
+                     "emitido_em": r[5] or ""}
+                    for r in cursor.fetchall()
+                ]
+                # Marca quais cod_pep ainda estao vinculados a uma obra
+                # existente (remover do registro nao "libera" enquanto a
+                # obra usar aquele cod_pep).
+                obras_set: set[str] = set()
+                try:
+                    cursor.execute(
+                        "SELECT cod_pep FROM obras "
+                        "WHERE cod_pep IS NOT NULL AND TRIM(cod_pep)<>''"
+                    )
+                    for (cp,) in cursor.fetchall():
+                        obras_set.add(str(cp or "").strip().upper())
+                except Exception:  # noqa: BLE001
+                    obras_set = set()
+                for row in rows:
+                    row["em_obra"] = (
+                        str(row["cod_pep"]).strip().upper() in obras_set)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("cod_pep_ledger_list: %s", exc)
+                return [], 0
+        return rows, total
+
+    @run_write_in_qthread_if_ui_thread
+    @with_lock_action("Inserir COD_PEP no registro")
+    @retry_on_busy()
+    def cod_pep_ledger_add(self, cod_pep: str, obra_cod: str = "") -> int:
+        """Reserva manualmente um COD_PEP no registro. Faz parse para
+        extrair empresa/yy/seq. Retorna 1 se inseriu, 0 se ja existia."""
+        parsed = parse_cod_pep(cod_pep)
+        if not parsed:
+            raise ValueError(f"COD_PEP invalido: '{cod_pep}'")
+        self._ensure_cod_pep_ledger()
+        inserido = 0
+        with self._with_connection():
+            cursor = self._get_cursor()
+            if not cursor:
+                return 0
+            agora = datetime.datetime.now().strftime('%d/%m/%y %H:%M')
+            with self.write_transaction():
+                cursor.execute(
+                    "INSERT OR IGNORE INTO cod_pep_emitidos "
+                    "(empresa, yy, seq, cod_pep, obra_cod, emitido_em) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (parsed["empresa"], parsed["yy"], int(parsed["seq"]),
+                     str(cod_pep).strip().upper(), str(obra_cod or ""), agora),
+                )
+                inserido = int(cursor.rowcount or 0)
+        return inserido
+
+    @run_write_in_qthread_if_ui_thread
+    @with_lock_action("Remover COD_PEP do registro")
+    @retry_on_busy()
+    def cod_pep_ledger_remove(
+        self, empresa: str, yy: str, seq: int,
+    ) -> int:
+        """Remove uma reserva do registro (libera o SSSS daquele ano para
+        ser reaproveitado). Retorna a contagem removida."""
+        self._ensure_cod_pep_ledger()
+        removido = 0
+        with self._with_connection():
+            cursor = self._get_cursor()
+            if not cursor:
+                return 0
+            with self.write_transaction():
+                cursor.execute(
+                    "DELETE FROM cod_pep_emitidos "
+                    "WHERE empresa=? AND yy=? AND seq=?",
+                    (normalize_text(empresa), str(yy or "").strip(), int(seq)),
+                )
+                removido = int(cursor.rowcount or 0)
+        return removido
 
     def count_tecnico_dirty(self, pacotes=None) -> int:
         """Conta obras com dados técnicos desatualizados."""
