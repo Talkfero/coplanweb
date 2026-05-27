@@ -97,55 +97,57 @@ class ResumosMixin:
                 "ano_dominante": None,
             }
         ano_s = str(ano or "").strip()
+        ano_dominante = None
         try:
-            cursor = db._get_cursor()
-            if cursor is None:
-                return {"ok": False, "error": "cursor indisponivel"}
-            where_clause, _params_list = self._build_resumo_where(ano_s, cods)
-            params: tuple[Any, ...] = tuple(_params_list)
-            cursor.execute(
-                "SELECT "
-                "  COUNT(*),"
-                f" SUM({self._sql_to_real('valor_obra')}),"
-                f" SUM({self._sql_to_real('quantidade_material')}),"
-                f" SUM({self._sql_to_real('contas_contratos_beneficiadas')}),"
-                "  SUM(CASE WHEN ("
-                "    UPPER(COALESCE(tipo_pacote,'')) LIKE '%POSTERGA%' OR"
-                "    UPPER(COALESCE(manobra,''))     LIKE '%POSTERGA%' OR"
-                "    UPPER(COALESCE(tipo_pacote,'')) LIKE '%PLPT%'"
-                "  ) THEN 1 ELSE 0 END)"
-                f" FROM obras{where_clause}",
-                params,
-            )
-            row = cursor.fetchone()
-            if row is None:
-                return {"ok": False, "error": "sem dados"}
-            obras_total = int(row[0] or 0)
-            capex_total = float(row[1] or 0.0)
-            km_total = float(row[2] or 0.0)
-            contas_benef = int(row[3] or 0)
-            postergacoes = int(row[4] or 0)
+            with db._with_connection():
+                cursor = db._get_cursor()
+                if cursor is None:
+                    return {"ok": False, "error": "cursor indisponivel"}
+                where_clause, _params_list = self._build_resumo_where(ano_s, cods)
+                params: tuple[Any, ...] = tuple(_params_list)
+                cursor.execute(
+                    "SELECT "
+                    "  COUNT(*),"
+                    f" SUM({self._sql_to_real('valor_obra')}),"
+                    f" SUM({self._sql_to_real('quantidade_material')}),"
+                    f" SUM({self._sql_to_real('contas_contratos_beneficiadas')}),"
+                    "  SUM(CASE WHEN ("
+                    "    UPPER(COALESCE(tipo_pacote,'')) LIKE '%POSTERGA%' OR"
+                    "    UPPER(COALESCE(manobra,''))     LIKE '%POSTERGA%' OR"
+                    "    UPPER(COALESCE(tipo_pacote,'')) LIKE '%PLPT%'"
+                    "  ) THEN 1 ELSE 0 END)"
+                    f" FROM obras{where_clause}",
+                    params,
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    return {"ok": False, "error": "sem dados"}
+                obras_total = int(row[0] or 0)
+                capex_total = float(row[1] or 0.0)
+                km_total = float(row[2] or 0.0)
+                contas_benef = int(row[3] or 0)
+                postergacoes = int(row[4] or 0)
+
+                # Ano dominante: util quando ano nao foi informado.
+                if not ano_s:
+                    try:
+                        cursor.execute(
+                            "SELECT ano_, COUNT(*) c FROM obras "
+                            "WHERE ano_ IS NOT NULL AND TRIM(ano_)<>'' "
+                            "GROUP BY ano_ ORDER BY c DESC LIMIT 1"
+                        )
+                        ar = cursor.fetchone()
+                        ano_dominante = (str(ar[0]).strip()
+                                         if ar and ar[0] is not None else None)
+                    except Exception:  # noqa: BLE001
+                        pass
+                else:
+                    ano_dominante = ano_s
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"sql: {exc}",
                     "ano": ano_s, "capex_total": 0.0, "obras_total": 0,
                     "km_total": 0.0, "contas_beneficiadas": 0,
                     "postergacoes": 0, "ano_dominante": None}
-
-        # Ano dominante: util quando ano nao foi informado.
-        ano_dominante = None
-        if not ano_s:
-            try:
-                cursor.execute(
-                    "SELECT ano_, COUNT(*) c FROM obras "
-                    "WHERE ano_ IS NOT NULL AND TRIM(ano_)<>'' "
-                    "GROUP BY ano_ ORDER BY c DESC LIMIT 1"
-                )
-                ar = cursor.fetchone()
-                ano_dominante = str(ar[0]).strip() if ar and ar[0] is not None else None
-            except Exception:  # noqa: BLE001
-                pass
-        else:
-            ano_dominante = ano_s
         return {
             "ok": True, "error": "",
             "ano": ano_s, "ano_dominante": ano_dominante,
@@ -170,21 +172,23 @@ class ResumosMixin:
                     "ano": str(ano or ""), "items": []}
         ano_s = str(ano or "").strip()
         try:
-            cursor = db._get_cursor()
-            if cursor is None:
-                return {"ok": False, "error": "cursor", "ano": ano_s, "items": []}
-            where, _params = self._build_resumo_where(ano_s, cods)
-            params: tuple[Any, ...] = tuple(_params)
-            cursor.execute(
-                "SELECT "
-                "  UPPER(TRIM(COALESCE(nome_regional,'(SEM REGIONAL)'))),"
-                "  COUNT(*),"
-                f" SUM({self._sql_to_real('valor_obra')})"
-                f" FROM obras{where} "
-                "GROUP BY UPPER(TRIM(COALESCE(nome_regional,'(SEM REGIONAL)')))",
-                params,
-            )
-            rows = cursor.fetchall() or []
+            with db._with_connection():
+                cursor = db._get_cursor()
+                if cursor is None:
+                    return {"ok": False, "error": "cursor",
+                            "ano": ano_s, "items": []}
+                where, _params = self._build_resumo_where(ano_s, cods)
+                params: tuple[Any, ...] = tuple(_params)
+                cursor.execute(
+                    "SELECT "
+                    "  UPPER(TRIM(COALESCE(nome_regional,'(SEM REGIONAL)'))),"
+                    "  COUNT(*),"
+                    f" SUM({self._sql_to_real('valor_obra')})"
+                    f" FROM obras{where} "
+                    "GROUP BY UPPER(TRIM(COALESCE(nome_regional,'(SEM REGIONAL)')))",
+                    params,
+                )
+                rows = cursor.fetchall() or []
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"sql: {exc}", "ano": ano_s, "items": []}
 
@@ -208,20 +212,22 @@ class ResumosMixin:
                     "ano": str(ano or ""), "items": []}
         ano_s = str(ano or "").strip()
         try:
-            cursor = db._get_cursor()
-            if cursor is None:
-                return {"ok": False, "error": "cursor", "ano": ano_s, "items": []}
-            where, _params = self._build_resumo_where(ano_s, cods)
-            params: tuple[Any, ...] = tuple(_params)
-            cursor.execute(
-                "SELECT "
-                "  TRIM(COALESCE(tipo_pacote,'')),"
-                "  COUNT(*),"
-                f" SUM({self._sql_to_real('valor_obra')})"
-                f" FROM obras{where} GROUP BY TRIM(COALESCE(tipo_pacote,''))",
-                params,
-            )
-            rows = cursor.fetchall() or []
+            with db._with_connection():
+                cursor = db._get_cursor()
+                if cursor is None:
+                    return {"ok": False, "error": "cursor",
+                            "ano": ano_s, "items": []}
+                where, _params = self._build_resumo_where(ano_s, cods)
+                params: tuple[Any, ...] = tuple(_params)
+                cursor.execute(
+                    "SELECT "
+                    "  TRIM(COALESCE(tipo_pacote,'')),"
+                    "  COUNT(*),"
+                    f" SUM({self._sql_to_real('valor_obra')})"
+                    f" FROM obras{where} GROUP BY TRIM(COALESCE(tipo_pacote,''))",
+                    params,
+                )
+                rows = cursor.fetchall() or []
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"sql: {exc}",
                     "ano": ano_s, "items": []}
@@ -266,29 +272,30 @@ class ResumosMixin:
                     "ano": str(ano or ""), "items": [], "total": None}
         ano_s = str(ano or "").strip()
         try:
-            cursor = db._get_cursor()
-            if cursor is None:
-                return {"ok": False, "error": "cursor",
-                        "ano": ano_s, "items": [], "total": None}
-            where, _params = self._build_resumo_where(ano_s, cods)
-            params: tuple[Any, ...] = tuple(_params)
-            # Por regional
-            cursor.execute(
-                "SELECT "
-                "  UPPER(TRIM(COALESCE(nome_regional,'(SEM REGIONAL)'))) AS reg,"
-                "  COUNT(*) AS obras,"
-                f" SUM({self._sql_to_real('quantidade_material')}) AS km,"
-                f" AVG({self._sql_to_real('tensao_media_final')}) AS tensao_med,"
-                f" AVG({self._sql_to_real('chi_final')}) AS chi,"
-                f" AVG({self._sql_to_real('ci_final')}) AS ci,"
-                f" AVG({self._sql_to_real('carregamento_final')}) AS carreg,"
-                f" SUM({self._sql_to_real('contas_contratos_beneficiadas')}) AS contas,"
-                f" SUM({self._sql_to_real('valor_obra')}) AS valor"
-                f" FROM obras{where}"
-                " GROUP BY UPPER(TRIM(COALESCE(nome_regional,'(SEM REGIONAL)')))",
-                params,
-            )
-            rows = cursor.fetchall() or []
+            with db._with_connection():
+                cursor = db._get_cursor()
+                if cursor is None:
+                    return {"ok": False, "error": "cursor",
+                            "ano": ano_s, "items": [], "total": None}
+                where, _params = self._build_resumo_where(ano_s, cods)
+                params: tuple[Any, ...] = tuple(_params)
+                # Por regional
+                cursor.execute(
+                    "SELECT "
+                    "  UPPER(TRIM(COALESCE(nome_regional,'(SEM REGIONAL)'))) AS reg,"
+                    "  COUNT(*) AS obras,"
+                    f" SUM({self._sql_to_real('quantidade_material')}) AS km,"
+                    f" AVG({self._sql_to_real('tensao_media_final')}) AS tensao_med,"
+                    f" AVG({self._sql_to_real('chi_final')}) AS chi,"
+                    f" AVG({self._sql_to_real('ci_final')}) AS ci,"
+                    f" AVG({self._sql_to_real('carregamento_final')}) AS carreg,"
+                    f" SUM({self._sql_to_real('contas_contratos_beneficiadas')}) AS contas,"
+                    f" SUM({self._sql_to_real('valor_obra')}) AS valor"
+                    f" FROM obras{where}"
+                    " GROUP BY UPPER(TRIM(COALESCE(nome_regional,'(SEM REGIONAL)')))",
+                    params,
+                )
+                rows = cursor.fetchall() or []
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"sql: {exc}",
                     "ano": ano_s, "items": [], "total": None}
@@ -349,18 +356,19 @@ class ResumosMixin:
             return {"ok": False, "error": err or "db indisponivel",
                     "linhas": [], "projeto": nome_s}
         try:
-            cursor = db._get_cursor()
-            if cursor is None:
-                return {"ok": False, "error": "cursor",
-                        "linhas": [], "projeto": nome_s}
-            cursor.execute(
-                "SELECT alimentador_principal, alimentadores_beneficiados,"
-                " codigo_item, ganhos_totais_depois"
-                " FROM obras"
-                " WHERE UPPER(TRIM(COALESCE(nome_projeto,'')))=UPPER(TRIM(?))",
-                (nome_s,),
-            )
-            rows = cursor.fetchall() or []
+            with db._with_connection():
+                cursor = db._get_cursor()
+                if cursor is None:
+                    return {"ok": False, "error": "cursor",
+                            "linhas": [], "projeto": nome_s}
+                cursor.execute(
+                    "SELECT alimentador_principal, alimentadores_beneficiados,"
+                    " codigo_item, ganhos_totais_depois"
+                    " FROM obras"
+                    " WHERE UPPER(TRIM(COALESCE(nome_projeto,'')))=UPPER(TRIM(?))",
+                    (nome_s,),
+                )
+                rows = cursor.fetchall() or []
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"sql: {exc}",
                     "linhas": [], "projeto": nome_s}
@@ -633,21 +641,22 @@ class ResumosMixin:
             return {"ok": False, "error": err or "db indisponivel",
                     "ano": str(ano or ""), "cabecalhos": ["PI"], "linhas": []}
         try:
-            cursor = db._get_cursor()
-            if cursor is None:
-                return {"ok": False, "error": "cursor",
-                        "ano": str(ano or ""),
-                        "cabecalhos": ["PI"], "linhas": []}
             ano_s = str(ano or "").strip()
-            where, _params = self._build_resumo_where(ano_s, cods)
-            params: tuple[Any, ...] = tuple(_params)
-            cursor.execute(
-                "SELECT projeto_investimento, ano_, valor_obra,"
-                " quantidade_material"
-                f" FROM obras{where}",
-                params,
-            )
-            rows = cursor.fetchall() or []
+            with db._with_connection():
+                cursor = db._get_cursor()
+                if cursor is None:
+                    return {"ok": False, "error": "cursor",
+                            "ano": str(ano or ""),
+                            "cabecalhos": ["PI"], "linhas": []}
+                where, _params = self._build_resumo_where(ano_s, cods)
+                params: tuple[Any, ...] = tuple(_params)
+                cursor.execute(
+                    "SELECT projeto_investimento, ano_, valor_obra,"
+                    " quantidade_material"
+                    f" FROM obras{where}",
+                    params,
+                )
+                rows = cursor.fetchall() or []
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"sql: {exc}",
                     "ano": str(ano or ""),
