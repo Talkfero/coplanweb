@@ -1870,7 +1870,25 @@
         if (typeof window.coplanToast === 'function') {
           window.coplanToast('Selecione o arquivo de origem...', 'info');
         }
+        // Feedback imediato: a fase "ask" le o arquivo + detecta
+        // duplicidades de forma sincrona (pode demorar com muitas linhas).
+        // Mostra um indicador para nao parecer travado; fecha ao retornar.
+        var __prog = window.coplanProgress;
+        var __progOpen = false;
+        if (__prog && __prog.open) {
+          try {
+            __prog.open('Lendo e analisando o arquivo (duplicidades)...');
+            __progOpen = true;
+          } catch (e) { __progOpen = false; }
+        }
+        var __closeProg = function () {
+          if (__progOpen && __prog && __prog.close) {
+            try { __prog.close(); } catch (e) {}
+          }
+          __progOpen = false;
+        };
         api.header_import_excel('ask').then(function (r) {
+          __closeProg();
           if (!r) return;
           // Resultado simples (sem duplicadas) ou erro
           var handleFinal = function (res) {
@@ -2047,6 +2065,7 @@
           }
           handleFinal(r);
         }).catch(function (err) {
+          __closeProg();
           if (typeof window.coplanToast === 'function') {
             window.coplanToast(
               'Falha ao importar: '
