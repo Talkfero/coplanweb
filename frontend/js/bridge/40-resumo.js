@@ -7,20 +7,16 @@
   function fmtBR(n) {
     return Number(n || 0).toLocaleString('pt-BR');
   }
-  function fmtMoneyM(v) {
-    var n = Number(v || 0);
-    if (n >= 1e9) return (n / 1e9).toFixed(1).replace('.', ',');
-    if (n >= 1e6) return (n / 1e6).toFixed(1).replace('.', ',');
-    if (n >= 1e3) return (n / 1e3).toFixed(1).replace('.', ',');
-    return Math.round(n).toString();
-  }
-  function moneyUnit(v) {
-    var n = Number(v || 0);
-    if (n >= 1e9) return 'B R$';
-    if (n >= 1e6) return 'M R$';
-    if (n >= 1e3) return 'K R$';
-    return 'R$';
-  }
+  // Diretriz Resumo: TODO valor monetario (R$) na aba Resumo e exibido
+  // SEMPRE em milhoes (R$ mi), nunca em K/B nem em valor cheio. Helper
+  // unico e compartilhado entre os IIFEs do Resumo.
+  window.coplanFmtMi = window.coplanFmtMi || function (v, dec) {
+    var n = Number(v || 0) / 1e6;
+    var d = (dec == null) ? 1 : dec;
+    return n.toLocaleString('pt-BR', {
+      minimumFractionDigits: d, maximumFractionDigits: d,
+    });
+  };
   function fmtKm(v) {
     var n = Number(v || 0);
     if (n >= 1000) return n.toLocaleString('pt-BR', {maximumFractionDigits:0});
@@ -59,7 +55,7 @@
     if (!grid) return;
     var anoLbl = s.ano || s.ano_dominante || '';
     setKpi(grid, 0, 'CAPEX' + (anoLbl ? ' ' + anoLbl : ''),
-           fmtMoneyM(s.capex_total), moneyUnit(s.capex_total));
+           window.coplanFmtMi(s.capex_total), 'M R$');
     setKpi(grid, 1, 'Obras planejadas', fmtBR(s.obras_total), '');
     setKpi(grid, 2, 'Km de rede', fmtKm(s.km_total), 'km');
     setKpi(grid, 3, 'Contas beneficiadas', fmtContas(s.contas_beneficiadas), '');
@@ -116,13 +112,6 @@
       return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c];
     });
   }
-  function fmtMoneyM(v) {
-    var n = Number(v || 0);
-    if (n >= 1e9) return 'R$ ' + (n / 1e9).toFixed(1).replace('.', ',') + 'B';
-    if (n >= 1e6) return 'R$ ' + (n / 1e6).toFixed(1).replace('.', ',') + 'M';
-    if (n >= 1e3) return 'R$ ' + (n / 1e3).toFixed(1).replace('.', ',') + 'K';
-    return 'R$ ' + Number(n).toLocaleString('pt-BR');
-  }
   window.coplanRenderBar = function (state) {
     var box = document.getElementById('bar-chart');
     if (!box || !state || !state.ok) return;
@@ -144,7 +133,7 @@
            +   '<span style="font-weight:500;">' + esc(v.regional) + '</span>'
            +   '<div class="bar-track"><div class="bar-fill" style="width:'
            +     pct + '%"></div></div>'
-           +   '<span class="bar-value">' + esc(fmtMoneyM(v.valor)) + '</span>'
+           +   '<span class="bar-value">R$ ' + esc(window.coplanFmtMi(v.valor)) + ' mi</span>'
            + '</div>';
     }).join('');
     document.dispatchEvent(new CustomEvent('coplan:resumo:vol',
@@ -242,13 +231,6 @@
       return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c];
     });
   }
-  function fmtMoneyM(v) {
-    var n = Number(v || 0);
-    if (n >= 1e9) return 'R$ ' + (n / 1e9).toFixed(1).replace('.', ',') + 'B';
-    if (n >= 1e6) return 'R$ ' + (n / 1e6).toFixed(1).replace('.', ',') + 'M';
-    if (n >= 1e3) return 'R$ ' + (n / 1e3).toFixed(1).replace('.', ',') + 'K';
-    return 'R$ ' + Number(n).toLocaleString('pt-BR');
-  }
   function findPacotesCard() {
     var scope = document.getElementById('tab-resumo');
     if (!scope) return null;
@@ -278,8 +260,8 @@
             +   '<span><span class="legend-dot" style="color:'
             +     esc(it.color || 'var(--text-soft)') + ';"></span> '
             +     esc(it.label) + '</span>'
-            +   '<span class="mono">' + pct + '% · ' + esc(fmtMoneyM(it.valor))
-            +   '</span>'
+            +   '<span class="mono">' + pct + '% · R$ '
+            +     esc(window.coplanFmtMi(it.valor)) + ' mi</span>'
             + '</div>';
     });
     html += '</div>';
@@ -346,7 +328,7 @@
       +   '<td class="num mono">' + fmt(it.ci, 2) + '</td>'
       +   '<td class="num mono">' + fmt(it.carreg, 1) + '</td>'
       +   '<td class="num mono">' + fmt(it.contas) + '</td>'
-      +   '<td class="num mono">' + fmt(it.valor, 0) + '</td>'
+      +   '<td class="num mono">' + window.coplanFmtMi(it.valor) + '</td>'
       + '</tr>';
   }
   function findVolTable() {
@@ -379,7 +361,7 @@
           +   '<td class="num mono">' + fmt(t.ci, 2) + '</td>'
           +   '<td class="num mono">' + fmt(t.carreg, 1) + '</td>'
           +   '<td class="num mono">' + fmt(t.contas) + '</td>'
-          +   '<td class="num mono">' + fmt(t.valor, 0) + '</td>'
+          +   '<td class="num mono">' + window.coplanFmtMi(t.valor) + '</td>'
           + '</tr>';
       }
       if (foot) foot.innerHTML = totalHtml;
@@ -552,6 +534,12 @@
       })[c];
     });
   }
+  // Reverte o pt-BR ('1.234,56') de volta a Number para reexibir em milhoes.
+  function parseBR(s) {
+    var t = String(s == null ? '' : s).trim();
+    if (!t || t === '-') return 0;
+    return parseFloat(t.replace(/\./g, '').replace(',', '.')) || 0;
+  }
   function norm(s) {
     return String(s || '').trim().toLowerCase()
       .normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -608,10 +596,17 @@
       return;
     }
     var heads = state.cabecalhos || ['PI'];
+    // Colunas 'Valor' sao monetarias -> exibidas em milhoes (R$ mi).
+    // 'Fisico' (km) nao se converte.
+    var isValor = heads.map(function (h) {
+      return String(h).indexOf('Valor') >= 0;
+    });
     var theadHtml = '<tr>';
     heads.forEach(function (h, i) {
       var cls = (i === 0) ? '' : 'class="num"';
-      var label = esc(h).replace(new RegExp("\n", "g"), '<br>');
+      var htxt = isValor[i]
+        ? String(h).replace('Valor', 'Valor (R$ mi)') : h;
+      var label = esc(htxt).replace(new RegExp("\n", "g"), '<br>');
       theadHtml += '<th ' + cls + '>' + label + '</th>';
     });
     theadHtml += '</tr>';
@@ -626,7 +621,8 @@
     tbody.innerHTML = linhas.map(function (linha) {
       return '<tr>' + linha.map(function (cel, i) {
         var cls = (i === 0) ? '' : 'class="num mono"';
-        return '<td ' + cls + '>' + esc(cel) + '</td>';
+        var out = isValor[i] ? window.coplanFmtMi(parseBR(cel)) : cel;
+        return '<td ' + cls + '>' + esc(out) + '</td>';
       }).join('') + '</tr>';
     }).join('');
   }

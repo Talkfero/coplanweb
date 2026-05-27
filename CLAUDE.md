@@ -127,6 +127,20 @@ inline (`# noqa: BLE001`, `# noqa: PLC0415`, `# noqa: E731`).
   da branch antiga já mesclada) — senão o diff "re-aplica" toda a sessão
   (ex.: ~19k linhas da divisão do bridge) e fica enorme sem motivo.
 
+## Aba Resumo (formatação de valores)
+
+**REGRA: todo valor monetário (R$) exibido na aba Resumo deve constar SEMPRE
+em milhões (R$ mi)** — nunca em valor cheio, K ou B, nem com escala dinâmica.
+Vale para KPIs (CAPEX), volumetria por regional, pacotes, quadro de volumetria
+e a tabela "Volumetria por PI x Ano". Use o helper único
+`window.coplanFmtMi(valor[, casas=1])` (definido no 1º IIFE de
+`frontend/js/bridge/40-resumo.js`), que faz `valor/1e6` e formata em pt-BR.
+Rotule as colunas/labels com `(R$ mi)` ou sufixo ` mi`. **Não** converta
+quantidades não monetárias (km/"Físico", contagens de obras/contas) — essas
+seguem na unidade própria. Os endpoints de resumo (e o `resumo_service`,
+compartilhado com o desktop) continuam retornando valores cheios; a conversão
+para milhões é só na camada de exibição (JS).
+
 ## Busca inteligente (search_obras / Visualizar)
 
 A "Busca inteligente em todos os campos" deve cobrir **todos** os campos
