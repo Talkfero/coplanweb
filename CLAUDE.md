@@ -48,6 +48,18 @@
   construtor**; ao trocar de banco, `DatabaseManager._refresh_cache` /
   `_ensure_cache_loaded` o **recriam quando `db_path` muda** (senão releria o
   banco anterior).
+- **Estrutura do banco**: documentada em **`docs/DATABASE.md`** (tabelas,
+  colunas, tipos, PKs — reutilizável por outros programas). Fontes do esquema:
+  `ORDERED_COLUMNS` (`runtime/config.py`), `create_table_if_needed` +
+  migrações (`add_column_if_missing`, `ensure_schema_business_patch`) em
+  `runtime/database.py`, e os `CREATE TABLE` em `backend/domains/*`
+  (`apoio`, `cenarios`) e `core/repositories/sqlite_schema.py`.
+  **REGRA: qualquer mudança de esquema (nova coluna, novo
+  `add_column_if_missing`, novo `CREATE TABLE`, nova tabela) DEVE atualizar
+  `docs/DATABASE.md`** — regenere a partir de um banco real com
+  `python scripts/dump_db_schema.py <db>` (sem arg usa `config.json["obras"]`)
+  ou ajuste à mão. Tabelas `cenarios_meta`/`cenarios_obras` são externas
+  (CAPEX): o app só lê.
 
 ## Como rodar
 
