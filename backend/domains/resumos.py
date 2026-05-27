@@ -11,6 +11,7 @@ import os  # noqa: F401
 import re  # noqa: F401
 import sys  # noqa: F401
 import threading  # noqa: F401
+from contextlib import contextmanager
 from datetime import datetime  # noqa: F401
 from pathlib import Path  # noqa: F401
 from typing import Any, Callable  # noqa: F401
@@ -86,6 +87,28 @@ class ResumosMixin:
             return "", []
         return " WHERE " + " AND ".join(clauses), params
 
+    @staticmethod
+    @contextmanager
+    def _resumo_conn(db: Any):
+        """Abre uma conexao SQLite *privada* (por chamada/thread) e a fecha
+        ao sair. Os endpoints de resumo rodam em threads do pywebview e sao
+        disparados em paralelo ao abrir a aba; usar a conn/cursor
+        compartilhados de DatabaseManager (`_with_connection`/`_get_cursor`)
+        causa corrida -- uma thread fecha a conn enquanto outra usa o cursor
+        -- e derruba o processo. Cada chamada abre a sua, como o
+        ObraReadRepo (DAL)."""
+        from core.repositories.sqlite_connection import (  # noqa: PLC0415
+            open_sqlite_safe,
+        )
+        conn = open_sqlite_safe(db.db_path)
+        try:
+            yield conn
+        finally:
+            try:
+                conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
     def resumo_kpis(self, ano: Any = "", cods: Any = None) -> dict[str, Any]:
         db, err = self._ensure_db_connected()
         if err or db is None:
@@ -99,8 +122,8 @@ class ResumosMixin:
         ano_s = str(ano or "").strip()
         ano_dominante = None
         try:
-            with db._with_connection():
-                cursor = db._get_cursor()
+            with self._resumo_conn(db) as conn:
+                cursor = conn.cursor()
                 if cursor is None:
                     return {"ok": False, "error": "cursor indisponivel"}
                 where_clause, _params_list = self._build_resumo_where(ano_s, cods)
@@ -172,8 +195,8 @@ class ResumosMixin:
                     "ano": str(ano or ""), "items": []}
         ano_s = str(ano or "").strip()
         try:
-            with db._with_connection():
-                cursor = db._get_cursor()
+            with self._resumo_conn(db) as conn:
+                cursor = conn.cursor()
                 if cursor is None:
                     return {"ok": False, "error": "cursor",
                             "ano": ano_s, "items": []}
@@ -212,8 +235,8 @@ class ResumosMixin:
                     "ano": str(ano or ""), "items": []}
         ano_s = str(ano or "").strip()
         try:
-            with db._with_connection():
-                cursor = db._get_cursor()
+            with self._resumo_conn(db) as conn:
+                cursor = conn.cursor()
                 if cursor is None:
                     return {"ok": False, "error": "cursor",
                             "ano": ano_s, "items": []}
@@ -272,8 +295,8 @@ class ResumosMixin:
                     "ano": str(ano or ""), "items": [], "total": None}
         ano_s = str(ano or "").strip()
         try:
-            with db._with_connection():
-                cursor = db._get_cursor()
+            with self._resumo_conn(db) as conn:
+                cursor = conn.cursor()
                 if cursor is None:
                     return {"ok": False, "error": "cursor",
                             "ano": ano_s, "items": [], "total": None}
@@ -356,8 +379,8 @@ class ResumosMixin:
             return {"ok": False, "error": err or "db indisponivel",
                     "linhas": [], "projeto": nome_s}
         try:
-            with db._with_connection():
-                cursor = db._get_cursor()
+            with self._resumo_conn(db) as conn:
+                cursor = conn.cursor()
                 if cursor is None:
                     return {"ok": False, "error": "cursor",
                             "linhas": [], "projeto": nome_s}
@@ -416,8 +439,8 @@ class ResumosMixin:
         if err or db is None:
             return {"ok": False, "items": [], "error": err or "db indisponivel"}
         try:
-            with db._with_connection():
-                cursor = db._get_cursor()
+            with self._resumo_conn(db) as conn:
+                cursor = conn.cursor()
                 if cursor is None:
                     return {"ok": False, "items": [], "error": "cursor"}
                 cursor.execute(
@@ -642,8 +665,8 @@ class ResumosMixin:
                     "ano": str(ano or ""), "cabecalhos": ["PI"], "linhas": []}
         try:
             ano_s = str(ano or "").strip()
-            with db._with_connection():
-                cursor = db._get_cursor()
+            with self._resumo_conn(db) as conn:
+                cursor = conn.cursor()
                 if cursor is None:
                     return {"ok": False, "error": "cursor",
                             "ano": str(ano or ""),
