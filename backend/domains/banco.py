@@ -381,6 +381,23 @@ class BancoMixin:
             )
         except Exception:  # noqa: BLE001
             find_duplicate_in_db = None
+        # Indice de duplicidade em lote: carrega as obras 1x e consulta em
+        # memoria (O(linhas+obras)) em vez de 1 SELECT por linha
+        # (O(linhas x obras)) -- muito mais rapido com muitas linhas.
+        dup_index = None
+        try:
+            from core.repositories.obra_query_repo import (  # noqa: PLC0415
+                build_duplicate_index,
+            )
+            cols_idx = list(db.get_column_names() or [])
+            with db._with_connection():
+                cur_idx = db._get_cursor()
+                if cur_idx is not None and cols_idx:
+                    dup_index = build_duplicate_index(cur_idx, cols_idx)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[main_web] build_duplicate_index falhou: {exc}",
+                  file=sys.stderr)
+            dup_index = None
         duplicadas: list[dict[str, Any]] = []
         rows_clean: list[dict[str, Any]] = []
         total_rows = int(len(df.index))
@@ -404,10 +421,13 @@ class BancoMixin:
                 if str(k).strip()
             }
             rows_clean.append(cleaned)
-            if find_duplicate_in_db is None:
+            if dup_index is None and find_duplicate_in_db is None:
                 continue
             try:
-                dup = find_duplicate_in_db(db, cleaned)
+                if dup_index is not None:
+                    dup = dup_index.find(cleaned)
+                else:
+                    dup = find_duplicate_in_db(db, cleaned)
             except Exception:  # noqa: BLE001
                 dup = None
             if dup:
