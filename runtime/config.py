@@ -473,6 +473,16 @@ class ConfigManager:
             if key not in config:
                 config[key] = val
 
+        # Contrato compartilhado entre os 3 apps (capex, coplanweb,
+        # sistemadecadastro): a env var PLANO_DE_OBRAS_DB, quando definida e
+        # apontando para um arquivo existente, sobrepoe o config["obras"] —
+        # assim todos abrem o MESMO banco de obras sem depender de cada
+        # config.json. Propaga para todos os leitores (DAL, DatabaseManager).
+        # Ver docs/INTEGRACAO_OBRAS.md.
+        _obras_env = os.environ.get("PLANO_DE_OBRAS_DB")
+        if _obras_env and os.path.exists(_obras_env):
+            config["obras"] = _obras_env
+
         return config
 
     @staticmethod
